@@ -1,0 +1,2 @@
+# React Router usa URLs reales, así que /anuncio/123 tiene que llegar al index.html.
+/*    /index.html   200

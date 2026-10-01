@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Eliminación de Datos — Baknazo</title>
+<style>
+  :root {
+    --text: #6b6375;
+    --text-h: #08060d;
+    --bg: #fff;
+    --border: #e5e4e7;
+    --accent: #aa3bff;
+    --accent-bg: rgba(170, 59, 255, 0.1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --text: #9ca3af;
+      --text-h: #f3f4f6;
+      --bg: #16171d;
+      --border: #2e303a;
+      --accent: #c084fc;
+      --accent-bg: rgba(192, 132, 252, 0.15);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 16px/1.6 system-ui, 'Segoe UI', Roboto, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+  .marca {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 30px;
+    color: var(--text-h);
+    margin: 0 0 8px;
+  }
+  .fecha {
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-size: 19px;
+    color: var(--text-h);
+    margin: 32px 0 10px;
+  }
+  p, li { margin: 0 0 12px; }
+  ol, ul { padding-left: 20px; }
+  a { color: var(--accent); }
+  .caja {
+    margin: 24px 0;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    background: var(--accent-bg);
+    border-radius: 12px;
+  }
+  .caja p:last-child { margin-bottom: 0; }
+  .aviso {
+    margin-top: 40px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 14px;
+  }
+  code {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 13px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--border);
+    color: var(--text-h);
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="marca">Baknazo</div>
+  <h1>Cómo eliminar tus datos</h1>
+  <p class="fecha">Última actualización: 8 de septiembre de 2026</p>
+
+  <p>
+    Si iniciaste sesión en Baknazo usando tu cuenta de Google, o si
+    creaste una cuenta manualmente, tienes derecho a solicitar la eliminación
+    completa de tu cuenta y de todos los datos asociados en cualquier momento.
+  </p>
+
+  <h2>Pasos para solicitar la eliminación</h2>
+  <ol>
+    <li>
+      Envía un correo a
+      <a href="mailto:soporte@baknazo.com?subject=Eliminar%20mis%20datos">soporte@baknazo.com</a>
+      con el asunto <strong>"Eliminar mis datos"</strong>.
+    </li>
+    <li>
+      Incluye en el correo el <strong>correo electrónico con el que te registraste</strong>
+      en Baknazo (el mismo que usa tu cuenta de Google, si iniciaste sesión con
+      esa opción).
+    </li>
+    <li>
+      Procesaremos tu solicitud y eliminaremos tu cuenta junto con todos los
+      datos asociados (nombres, apellidos, correo y tipo de cuenta) dentro de un
+      plazo máximo de <strong>15 días hábiles</strong>.
+    </li>
+    <li>
+      Te confirmaremos por correo cuando el proceso haya finalizado.
+    </li>
+  </ol>
+
+  <h2>Qué se elimina exactamente</h2>
+  <ul>
+    <li>Tu perfil: nombres, apellidos, correo electrónico.</li>
+    <li>Tu contraseña cifrada (si te registraste manualmente).</li>
+    <li>El tipo de cuenta asociado (Persona o Negocio).</li>
+    <li>Los tokens de sesión activos.</li>
+  </ul>
+
+  <p>
+    Para más detalles sobre el tratamiento de tus datos, consulta nuestra
+    <a href="/privacidad.html">Política de Privacidad</a>.
+  </p>
+
+  <div class="aviso">
+    Nota interna: reemplaza <code>soporte@baknazo.com</code> por tu correo de
+    contacto real, y ajusta el plazo de 15 días hábiles si tu proceso real es
+    distinto, antes de publicar esta página.
+  </div>
+</main>
+</body>
+</html>

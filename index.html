@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      html,
+      body {
+        background-color: #fafaf7;
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+      }
+      /* Al recargar con F5 el foco queda en <body>. Antes de que cargue el CSS de la
+         app, el navegador le dibuja su anillo de foco negro/blanco, que se ve como
+         líneas negras arriba de la página. El body nunca debe mostrar ese anillo. */
+      html:focus,
+      html:focus-visible,
+      body:focus,
+      body:focus-visible {
+        outline: none;
+      }
+    </style>
+    <script>
+      // Al recargar, el navegador restaura el scroll y salta cuando React termina
+      // de pintar. La app no conserva la vista entre recargas: siempre arranca arriba.
+      if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <title>Baknazo</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,130 @@
+/*
+ * Alertas flotantes.
+ *
+ * Sonner estiliza cada aviso con `[data-sonner-toast][data-styled='true']`
+ * (especificidad 0,2,0). Aquí se neutraliza con un selector más específico y
+ * el diseño real vive en `.bkn-alerta`, que es el nodo que devuelve
+ * `toast.custom`.
+ *
+ * El tipo se marca por partida triple: sello circular, color del texto y color
+ * del borde. Sin franja lateral de color, que es el recurso visual gastado de
+ * todo toast y además choca con la forma en que este proyecto dibuja sus
+ * alertas dentro de los formularios.
+ */
+
+ol.bkn-alertas[data-sonner-toaster] {
+  --width: 344px;
+  --gap: 12px;
+  --offset-right: 20px;
+  --offset-bottom: 20px;
+  --mobile-offset-left: 12px;
+  --mobile-offset-right: 12px;
+  --mobile-offset-bottom: 12px;
+  font-family: var(--font-sans);
+}
+
+ol.bkn-alertas[data-sonner-toaster]
+  li[data-sonner-toast][data-styled='true'] {
+  display: block;
+  width: var(--width);
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: inherit;
+  font-size: inherit;
+}
+
+.bkn-alerta {
+  /* Cada tipo sobrescribe estas tres variables; el resto sale del color. */
+  --alerta-color: var(--color-foreground);
+  --alerta-texto: var(--color-foreground);
+
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 10px 11px 13px;
+  border: 1px solid
+    color-mix(in oklab, var(--alerta-color) 32%, var(--color-border));
+  border-radius: 12px;
+  background: var(--color-white);
+  box-shadow:
+    0 1px 2px rgba(31, 41, 55, 0.04),
+    0 18px 40px -20px rgba(31, 41, 55, 0.45);
+}
+
+.bkn-alerta--exito {
+  --alerta-color: var(--color-success);
+  --alerta-texto: var(--color-success-deep);
+}
+
+.bkn-alerta--error {
+  --alerta-color: var(--color-danger);
+  --alerta-texto: var(--color-danger-deep);
+}
+
+.bkn-alerta--aviso {
+  --alerta-color: var(--color-warning);
+  --alerta-texto: var(--color-warning-deep);
+}
+
+.bkn-alerta--info {
+  --alerta-color: var(--color-accent);
+  --alerta-texto: var(--color-accent-dark);
+}
+
+.bkn-alerta__sello {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--alerta-color) 14%, transparent);
+  color: var(--alerta-texto);
+}
+
+/* IconoAlerta y los nuevos traen `margin-top` en línea para alinearse en las
+   filas de las alertas de formulario; dentro del sello estorba. */
+.bkn-alerta__sello > svg {
+  margin-top: 0 !important;
+}
+
+.bkn-alerta__texto {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--alerta-texto);
+  overflow-wrap: anywhere;
+}
+
+.bkn-alerta__cerrar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin: -2px -2px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition:
+    color 150ms ease-out,
+    background-color 150ms ease-out;
+}
+
+.bkn-alerta__cerrar:hover {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+.bkn-alerta__cerrar:active {
+  transform: scale(0.94);
+}

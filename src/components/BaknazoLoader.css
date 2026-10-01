@@ -1,0 +1,95 @@
+.baknazo-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+
+.baknazo-loader-stage {
+  display: block;
+  width: min(44vw, 220px);
+}
+
+/* Para una lista o un bloque dentro de la página. */
+.baknazo-loader--seccion {
+  gap: 12px;
+  padding: 40px 0;
+}
+
+.baknazo-loader--seccion .baknazo-loader-stage {
+  width: 72px;
+}
+
+/* Dentro de un botón: del tamaño de un icono y en línea con el texto. */
+.baknazo-loader--boton {
+  display: inline-flex;
+  flex-direction: row;
+  gap: 8px;
+  vertical-align: middle;
+}
+
+.baknazo-loader--boton .baknazo-loader-stage {
+  width: 1.15em;
+}
+
+.baknazo-loader-stage svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+/* Bolsa amarilla: pulso de escala + brillo (el "azo").
+   Clases y no ids: puede haber varios loaders a la vez en pantalla. */
+.baknazo-loader-bolsa {
+  fill: #fdb305;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: baknazo-loader-pulso 1.6s ease-in-out infinite;
+}
+
+/* halo detrás que destella */
+.baknazo-loader-halo {
+  fill: #fdb305;
+  transform-origin: center;
+  transform-box: fill-box;
+  opacity: 0;
+  animation: baknazo-loader-destello 1.6s ease-in-out infinite;
+}
+
+@keyframes baknazo-loader-pulso {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.07);
+  }
+}
+
+@keyframes baknazo-loader-destello {
+  0%,
+  60%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  42% {
+    opacity: 0.5;
+    transform: scale(1.18);
+  }
+}
+
+.baknazo-loader-mensaje {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+/* En un botón el texto hereda el color y el tamaño del botón. */
+.baknazo-loader--boton .baknazo-loader-mensaje {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}

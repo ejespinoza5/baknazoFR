@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { m } from 'motion/react';
+import { SALIDA } from '../lib/movimiento';
+import PulgarAnimado from './PulgarAnimado';
 import VisorGaleria from './VisorGaleria';
 import BaknazoLoader from './BaknazoLoader';
-import { IconoBocadillo, IconoCerrar, IconoCheck, IconoChevron, IconoCompartir, IconoGuardar, IconoLapiz, IconoPulgar, IconoTelefono } from './Iconos';
+import { IconoBandera, IconoBocadillo, IconoCerrar, IconoCheck, IconoChevron, IconoCompartir, IconoGuardar, IconoLapiz, IconoPulgar, IconoTelefono } from './Iconos';
 import { obtenerAnuncio, registrarContacto } from '../api/anuncios';
+import { useAbrirChat } from '../lib/abrirChat';
+import { useNavegacion } from '../lib/navegacion';
+import DenunciarAnuncio from './DenunciarAnuncio';
 import { mensajeDeMotivo } from '../lib/contacto';
 import { useBloqueoScroll } from '../lib/bloqueoScroll';
 import BloquePostulacion from './BloquePostulacion';
@@ -74,6 +80,8 @@ interface Props {
   onAbrirPerfil?: (semilla: SemillaPerfil) => void;
   onCambiarVendido?: (vendido: boolean) => void;
   vendido?: boolean;
+  /** Abierta desde el propio chat: "Enviar mensaje" no tiene a dónde llevar. */
+  sinChat?: boolean;
 }
 
 /**
@@ -118,7 +126,11 @@ export default function DetalleAnuncioModal({
   onAbrirPerfil,
   onCambiarVendido,
   vendido: vendidoProp,
+  sinChat = false,
 }: Props) {
+  const { abrir: abrirChat, abriendo: abriendoChat } = useAbrirChat();
+  const { sesion, irAlLogin } = useNavegacion();
+  const [denunciando, setDenunciando] = useState(false);
   const [cargado, setCargado] = useState<Anuncio | null>(null);
   const [fallo, setFallo] = useState<'sin-conexion' | 'error' | 'ajeno' | null>(null);
   const [indice, setIndice] = useState(0);
@@ -387,6 +399,13 @@ export default function DetalleAnuncioModal({
   const esDueñoConContacto = Boolean(
     anuncio && anuncio.esMio && anuncio.mostrarTelefono && !vendido
   );
+  /**
+   * Escribirle a quien publicó. Solo productos y servicios a la venta: en una
+   * vacante se habla con la postulación, y lo vendido ya no se negocia.
+   */
+  const puedeEscribir = Boolean(
+    !sinChat && anuncio && !anuncio.esMio && anuncio.pilar !== 'empleo' && anuncio.estado === 'PUBLICADO' && !vendido
+  );
   const telefono = contacto?.disponible ? contacto : null;
 
   const datos = [];
@@ -405,6 +424,11 @@ export default function DetalleAnuncioModal({
 
   const pedirTelefono = async () => {
     if (pidiendo || telefono) return;
+    // Sin cuenta no se revela ningún número (el backend tampoco lo daría).
+    if (!sesion) {
+      irAlLogin();
+      return;
+    }
     setPidiendo(true);
     try {
       const respuesta = await registrarContacto(id);
@@ -447,6 +471,10 @@ export default function DetalleAnuncioModal({
   useEffect(() => {
     visorRef.current = visor;
   }, [visor]);
+  const denunciandoRef = useRef(denunciando);
+  useEffect(() => {
+    denunciandoRef.current = denunciando;
+  }, [denunciando]);
 
   /** El bloqueo va aparte para que nada más pueda reejecutarlo. */
   useBloqueoScroll();
@@ -455,6 +483,12 @@ export default function DetalleAnuncioModal({
     panel.current?.focus();
 
     const alTeclear = (evento: KeyboardEvent) => {
+      // Con el formulario de denuncia abierto encima, el teclado es suyo: si no,
+      // Escape cerraba también la ficha y las flechas cambiaban la foto.
+      if (denunciandoRef.current) return;
+      // Escribiendo en un campo, las flechas mueven el cursor, no las fotos.
+      const enCampo = evento.target instanceof HTMLElement && evento.target.closest('input, textarea, select');
+      if (enCampo && (evento.key === 'ArrowLeft' || evento.key === 'ArrowRight')) return;
       if (evento.key === 'Escape') {
         if (visorRef.current) setVisor(false);
         else onCerrar();
@@ -486,19 +520,27 @@ export default function DetalleAnuncioModal({
 
   return (
     <div className="fixed inset-0 z-60 flex items-end justify-center sm:items-center sm:p-4">
-      <button
+      <m.button
         type="button"
         onClick={onCerrar}
         aria-label="Cerrar la publicación"
         className="absolute inset-0 cursor-default bg-carbon/55 backdrop-blur-[2px]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.25 }}
       />
 
-      <div
+      {/* La ficha entra subiendo un poco y creciendo apenas: se nota que se
+          abre sobre la lista, sin distraer. */}
+      <m.div
         ref={panel}
         role="dialog"
         aria-modal="true"
         aria-labelledby="detalle-titulo"
         tabIndex={-1}
+        initial={{ opacity: 0, y: 28, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.42, ease: SALIDA }}
         className="relative flex max-h-[94vh] w-full max-w-[1060px] flex-col overflow-hidden rounded-t-2xl border border-border bg-white shadow-[0_24px_64px_-24px_rgba(31,41,55,0.5)] outline-none sm:max-h-[90vh] sm:rounded-2xl lg:max-h-[86vh] lg:flex-row"
       >
         <button
@@ -763,7 +805,7 @@ export default function DetalleAnuncioModal({
                           : 'text-muted hover:bg-background hover:text-foreground'
                       }`}
                     >
-                      <IconoPulgar lleno={meGusta} />
+                      <PulgarAnimado lleno={meGusta} />
                     </button>
                     )}
                     {onAlternarGuardado && (
@@ -846,6 +888,7 @@ export default function DetalleAnuncioModal({
                     </>
                   )}
                 </p>
+                {denunciando && <DenunciarAnuncio anuncioId={anuncio.id} onCerrar={() => setDenunciando(false)} />}
 
                 {/* Empleo: postularse con el CV, o la bandeja si es tuya. */}
                 <BloquePostulacion anuncio={anuncio} />
@@ -879,11 +922,32 @@ export default function DetalleAnuncioModal({
                           : 'text-muted hover:bg-background hover:text-foreground'
                       }`}
                     >
-                      <IconoPulgar lleno={meGusta} />
-                      {meGusta ? 'Ya te gusta' : 'Me gusta'}
+                      <PulgarAnimado lleno={meGusta} className="[&>svg]:size-[18px]" />
+                      {meGusta ? 'Ya me gusta' : 'Me gusta'}
                     </button>
                   )}
                 </div>
+
+                {/* Denunciar: al final, en su propia fila. Se encuentra al terminar
+                    de leer, que es cuando uno decide si algo no está bien, sin
+                    competir con las acciones de comprar o postularse. */}
+                {!anuncio.esMio && (
+                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-border bg-background/60 px-3.5 py-2.5">
+                    <span className="shrink-0 text-muted">
+                      <IconoBandera />
+                    </span>
+                    <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-muted">
+                      ¿Algo no está bien con esta publicación?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => (sesion ? setDenunciando(true) : irAlLogin())}
+                      className="h-8 shrink-0 rounded-lg border border-border bg-white px-3 text-[12.5px] font-semibold text-foreground transition-colors hover:border-danger/40 hover:text-danger-deep"
+                    >
+                      Denunciar
+                    </button>
+                  </div>
+                )}
 
                 {/* Vendido no es un estado, así que no cabe en la lista de
                     estados de arriba: es una decisión del dueño que se puede
@@ -913,7 +977,7 @@ export default function DetalleAnuncioModal({
                   ser el dueño y lo segundo no puede serlo. Con las dos acciones
                   en una sola barra pegada al borde, la de abajo es la última
                   que se ve al terminar de leer, que es cuando se contacta. */}
-              {(puedeEditar || puedeVerTelefono || esDueñoConContacto) && (
+              {(puedeEditar || puedeVerTelefono || esDueñoConContacto || puedeEscribir) && (
                 <div className="sticky bottom-0 border-t border-border bg-white/95 px-5 py-4 backdrop-blur-sm sm:px-6">
                   {puedeEditar ? (
                     <button
@@ -934,7 +998,28 @@ export default function DetalleAnuncioModal({
                         No se muestra aquí porque es tuyo.
                       </span>
                     </p>
-                  ) : telefono ? (
+                  ) : (
+                    <div className="space-y-2.5">
+                  {puedeEscribir && (
+                    <button
+                      type="button"
+                      onClick={() => (sesion ? void abrirChat({ anuncioId: anuncio.id }) : irAlLogin())}
+                      disabled={abriendoChat}
+                      className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg text-[14px] font-semibold transition-colors disabled:opacity-60 ${
+                        puedeVerTelefono
+                          ? 'border border-border bg-white text-foreground hover:border-muted'
+                          : 'bg-accent text-white hover:bg-accent-dark'
+                      }`}
+                    >
+                      <IconoBocadillo />
+                      {abriendoChat
+                        ? 'Abriendo la conversación'
+                        : sesion
+                          ? `Enviar mensaje a ${anuncio.autor.nombre}`
+                          : 'Entra para escribirle'}
+                    </button>
+                  )}
+                  {!puedeVerTelefono ? null : telefono ? (
                     <div>
                       <p className="text-center text-[11px] tracking-[0.08em] text-muted uppercase">
                         Teléfono de {anuncio.autor.nombre}
@@ -981,15 +1066,28 @@ export default function DetalleAnuncioModal({
                       className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent text-[14px] font-semibold text-white transition-colors hover:bg-accent-dark disabled:opacity-60"
                     >
                       <IconoTelefono />
-                      {pidiendo ? <BaknazoLoader tamano="boton" mensaje="Buscando el número" /> : 'Ver número de teléfono'}
+                      {pidiendo ? (
+                        <BaknazoLoader tamano="boton" mensaje="Buscando el número" />
+                      ) : sesion ? (
+                        'Ver número de teléfono'
+                      ) : (
+                        'Entra para ver el número'
+                      )}
                     </button>
+                  )}
+                  {!sesion && (puedeEscribir || puedeVerTelefono) && (
+                    <p className="text-center text-[12px] text-muted">
+                      Contactar es solo con cuenta. Crearla es gratis.
+                    </p>
+                  )}
+                    </div>
                   )}
                 </div>
               )}
             </div>
           </>
         )}
-      </div>
+      </m.div>
 
       {visor && fotoActual && (
         <VisorGaleria

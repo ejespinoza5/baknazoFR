@@ -17,7 +17,6 @@ import { editarAnuncio, eliminarAnuncio, obtenerMisAnuncios } from '../../api/an
 import { notificarError, notificarExito } from '../../lib/notificar';
 import { urlCompleta } from '../../lib/imagen';
 import { formatearFecha, formatearPrecio, formatearUbicacion } from '../../lib/tarjeta';
-import { anotarPropios } from '../../lib/propios';
 import type { Anuncio, EstadoAnuncio } from '../../types/anuncio';
 import BaknazoLoader from '../../components/BaknazoLoader';
 
@@ -44,6 +43,13 @@ const ESTADOS: Record<EstadoFiltrable, DescripcionEstado> = {
     accion: { texto: 'Pausar', estado: 'PAUSADO' },
     ayuda: 'Visible para todo el mundo en el feed y en las búsquedas.',
   },
+  PENDIENTE_REVISION: {
+    etiqueta: 'En revisión',
+    tono: 'aviso',
+    // Lo libera un administrador: el dueño no puede publicarlo por su cuenta.
+    accion: null,
+    ayuda: 'Una regla de moderación lo detuvo. Un administrador lo revisa y te avisamos al aprobarlo.',
+  },
   PAUSADO: {
     etiqueta: 'Pausado',
     tono: 'aviso',
@@ -62,7 +68,7 @@ const ESTADOS: Record<EstadoFiltrable, DescripcionEstado> = {
     // El backend solo admite PUBLICADO y PAUSADO como destino, así que un
     // anuncio rechazado no se puede volver a publicar: hay que editarlo.
     accion: null,
-    ayuda: 'No pasó la revisión. Lee la nota y edita lo que se pidió.',
+    ayuda: 'No pasó la revisión. Lee la nota y edita lo que se pidió: al guardarlo vuelve a revisión.',
   },
 };
 
@@ -87,6 +93,7 @@ function descripcionDe(estado: EstadoAnuncio): DescripcionEstado {
 const FILTROS: { id: FiltroEstado; label: string }[] = [
   { id: 'TODOS', label: 'Todos' },
   { id: 'PUBLICADO', label: 'Publicados' },
+  { id: 'PENDIENTE_REVISION', label: 'En revisión' },
   { id: 'PAUSADO', label: 'Pausados' },
   { id: 'BORRADOR', label: 'Borradores' },
   { id: 'RECHAZADO', label: 'Rechazados' },
@@ -193,9 +200,6 @@ export default function MisAnunciosScreen({ onEditar }: Props) {
         setCursor(respuesta.pagina.siguienteCursor);
         setHayMas(respuesta.pagina.hayMas);
         setFallo(null);
-        // El feed no sabe qué anuncios son tuyos, así que se lo dejamos anotado
-        // para no ofrecerte un chat contigo mismo.
-        anotarPropios(respuesta.items.map((anuncio) => anuncio.id));
       })
       .catch((e: unknown) => {
         if (!vivo) return;
@@ -408,7 +412,10 @@ export default function MisAnunciosScreen({ onEditar }: Props) {
             <>
               <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {anuncios.map((anuncio) => {
-                  const descripcion = descripcionDe(anuncio.estado);
+                  // Una pausa de moderación no se reanuda desde aquí (el servidor tampoco lo deja).
+                  const descripcion = anuncio.pausaAdministrativa
+                    ? { ...descripcionDe(anuncio.estado), etiqueta: 'Pausado por moderación', tono: 'peligro' as TonoEstado, accion: null }
+                    : descripcionDe(anuncio.estado);
                   const ocupado = accionando === anuncio.id;
                   const bloqueado = accionando !== null;
                   return (
@@ -438,7 +445,7 @@ export default function MisAnunciosScreen({ onEditar }: Props) {
                             <span>{formatearFecha(anuncio.creadoEn)}</span>
                           </p>
 
-                          {anuncio.estado === 'RECHAZADO' && anuncio.notasModeracion && (
+                          {(anuncio.estado === 'RECHAZADO' || anuncio.pausaAdministrativa) && anuncio.notasModeracion && (
                             <p className="flex items-start gap-1.5 rounded-lg bg-danger/[0.06] px-2.5 py-2 text-[12px] leading-snug text-danger-deep">
                               <span className="mt-0.5 shrink-0">
                                 <IconoAlerta />

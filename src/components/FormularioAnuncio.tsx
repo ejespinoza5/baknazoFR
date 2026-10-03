@@ -1,4 +1,7 @@
 import { Campo, GrupoChips } from './Campos';
+import EditorCuestionario from './EditorCuestionario';
+import Selector from './Selector';
+import { opcionesCiudad } from '../lib/opcionesSelector';
 import { IconoAlerta, IconoTelefono } from './Iconos';
 import { inputBase, etiqueta as claseEtiqueta } from '../screens/config/ui';
 import {
@@ -101,46 +104,29 @@ export default function FormularioAnuncio({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo etiqueta="Categoría" error={errores.categoria} id="categoria">
-          <select
+          <Selector
             id="categoria"
-            value={form.categoriaId}
-            onChange={(e) =>
-              cambiar(
-                'categoriaId',
-                e.target.value === '' ? '' : Number(e.target.value)
-              )
-            }
-            aria-invalid={Boolean(errores.categoria)}
-            className={inputBase}
-          >
-            <option value="">Elige una categoría</option>
-            {categorias.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
+            etiqueta="Categoría"
+            valor={form.categoriaId === '' ? '' : String(form.categoriaId)}
+            onCambiar={(v) => cambiar('categoriaId', v === '' ? '' : Number(v))}
+            opciones={categorias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
+            placeholder="Elige una categoría"
+            textoBusqueda="Buscar categoría"
+            invalido={Boolean(errores.categoria)}
+          />
         </Campo>
 
         <Campo etiqueta="Ciudad" error={errores.ciudad} id="ciudad">
-          <select
+          <Selector
             id="ciudad"
-            value={form.cantonCodigo}
-            onChange={(e) => cambiar('cantonCodigo', e.target.value)}
-            aria-invalid={Boolean(errores.ciudad)}
-            className={`${inputBase} max-h-[264px] overflow-y-auto`}
-          >
-            <option value="">Elige una ciudad</option>
-            {catalogos.provincias.map((provincia) => (
-              <optgroup key={provincia.codigo} label={provincia.nombre}>
-                {provincia.cantones.map((canton) => (
-                  <option key={canton.codigo} value={canton.codigo}>
-                    {canton.nombre}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+            etiqueta="Ciudad"
+            valor={form.cantonCodigo}
+            onCambiar={(v) => cambiar('cantonCodigo', v)}
+            opciones={opcionesCiudad(catalogos)}
+            placeholder="Elige una ciudad"
+            textoBusqueda="Busca tu ciudad o provincia"
+            invalido={Boolean(errores.ciudad)}
+          />
         </Campo>
       </div>
 
@@ -186,6 +172,16 @@ export default function FormularioAnuncio({
           />
         ))}
       </div>
+
+      {pilar === 'empleo' && (
+        <EditorCuestionario
+          modo={form.modoPostulacion}
+          preguntas={form.preguntas}
+          error={errores.preguntas}
+          onModo={(modo) => cambiar('modoPostulacion', modo)}
+          onPreguntas={(preguntas) => cambiar('preguntas', preguntas)}
+        />
+      )}
 
       <div>
         <span className={claseEtiqueta}>

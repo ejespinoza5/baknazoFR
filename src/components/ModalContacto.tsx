@@ -8,7 +8,7 @@ interface Props {
   contacto: RespuestaContacto | null;
   /** A quién se va a llamar, para el encabezado. */
   nombreAutor: string;
-  /** Abre el chat. Hoy avisa, igual que el botón de la cabecera. */
+  /** Abre (o crea) la conversación con quien publicó. */
   onEscribir: () => void;
   onCerrar: () => void;
 }

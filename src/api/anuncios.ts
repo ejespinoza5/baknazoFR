@@ -200,6 +200,32 @@ export function quitarLike(id: number): Promise<RespuestaLike> {
   return enviarAutenticado<RespuestaLike>(`/api/anuncios/${id}/likes/me`, 'DELETE');
 }
 
+/* ---------- Moderación ---------- */
+
+export interface RevisionTexto {
+  /** Se publicaría, pasaría por revisión o no se puede publicar. */
+  decision: 'PUBLICAR' | 'REVISION' | 'BLOQUEAR';
+  /** Solo si se bloquea: en qué campo está el problema (nunca qué palabra). */
+  campo?: 'titulo' | 'descripcion' | 'categoriaId';
+}
+
+/** Lo que diría la moderación del texto, mientras se escribe. */
+export function revisarTextoAnuncio(datos: { titulo: string; descripcion: string; categoriaId: number | null }): Promise<RevisionTexto> {
+  return enviarAutenticado('/api/anuncios/revisar-texto', 'POST', datos);
+}
+
+/** Un 422 que viene de la moderación (contenido o categoría no permitidos). */
+export function esBloqueoDeModeracion(errores: Partial<Record<string, string>> | null): boolean {
+  return Boolean(errores && Object.values(errores).some((m) => typeof m === 'string' && /normas de Baknazo|no admite publicaciones/.test(m)));
+}
+
+/* ---------- Denuncias ---------- */
+
+/** Denunciar un anuncio. Una vez por persona; un 409 dice que ya se denunció. */
+export function denunciarAnuncio(id: number, motivo: string, detalle?: string): Promise<{ denunciado: boolean }> {
+  return enviarAutenticado(`/api/anuncios/${id}/denuncias`, 'POST', { motivo, detalle: detalle?.trim() || undefined });
+}
+
 /* ---------- Guardados ---------- */
 
 export function guardarAnuncio(id: number): Promise<{ guardado: boolean }> {

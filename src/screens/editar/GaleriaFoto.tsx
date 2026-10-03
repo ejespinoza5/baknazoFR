@@ -6,6 +6,7 @@ import { normalizarImagen } from '../../lib/imagen';
 import { fotoEntera } from '../config/ui';
 import { FORMATOS_FOTO } from '../publicar/datos';
 import type { FotoAnuncio } from '../../types/anuncio';
+import FormatosAceptados from '../../components/FormatosAceptados';
 
 export interface Galeria {
   /** Las que ya están guardadas, en el orden en que se mostrarán. */
@@ -198,6 +199,7 @@ export default function GaleriaFoto({ galeria, onCambio, maxFotos, maxBytes }: P
           toca el botón de ajustar.
         </p>
       )}
+      <FormatosAceptados maxBytes={maxBytes} />
 
       {recortando !== null && nuevas[recortando] && (
         <RecortadorImagen

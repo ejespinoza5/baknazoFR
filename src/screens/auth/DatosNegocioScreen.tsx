@@ -22,6 +22,8 @@ import {
 } from '../../components/Iconos';
 import MapaUbicacion from '../../components/MapaUbicacion';
 import RecortadorImagen from '../../components/RecortadorImagen';
+import Selector from '../../components/Selector';
+import { opcionesTexto } from '../../lib/opcionesSelector';
 import type {
   Consentimiento,
   DatosRegistroNegocio,
@@ -503,35 +505,30 @@ export default function DatosNegocioScreen({
                     />
                   </label>
 
-                  <label className="block">
+                  <div>
                     <span className={etiqueta}>Categoría *</span>
-                    <select
-                      value={categoria}
-                      onChange={(e) => setCategoria(e.target.value)}
-                      disabled={errorCategorias !== null || !categorias.length}
-                      className={`${inputBase} appearance-none disabled:opacity-50 ${
-                        tocado && !categoria ? 'border-terracota/60' : ''
-                      }`}
-                    >
-                      <option value="">
-                        {errorCategorias
+                    <Selector
+                      etiqueta="Categoría del negocio"
+                      valor={String(categoria ?? '')}
+                      onCambiar={setCategoria}
+                      opciones={categorias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
+                      deshabilitado={errorCategorias !== null || !categorias.length}
+                      invalido={tocado && !categoria}
+                      placeholder={
+                        errorCategorias
                           ? 'No se pudieron cargar las categorías'
                           : categorias.length
                             ? 'Elige una categoría'
-                            : 'Cargando categorías…'}
-                      </option>
-                      {categorias.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nombre}
-                        </option>
-                      ))}
-                    </select>
+                            : 'Cargando categorías…'
+                      }
+                      textoBusqueda="Buscar categoría"
+                    />
                     {errorCategorias && (
                       <p className="mt-1.5 text-[12px] text-terracota">
                         {errorCategorias}
                       </p>
                     )}
-                  </label>
+                  </div>
 
                   <label className="block">
                     <span className={etiqueta}>
@@ -729,10 +726,10 @@ export default function DatosNegocioScreen({
                           </button>
                         </div>
                       ) : (
-                        <select
-                          value={provincia}
-                          onChange={(e) => {
-                            const valor = e.target.value;
+                        <Selector
+                          etiqueta="Provincia"
+                          valor={provincia}
+                          onCambiar={(valor) => {
                             if (valor === '__otra__') {
                               setProvinciaOtro(true);
                               setProvincia('');
@@ -744,16 +741,10 @@ export default function DatosNegocioScreen({
                             setCiudad('');
                             setCiudadOtro(false);
                           }}
-                          className={`${inputBase} appearance-none`}
-                        >
-                          <option value="">Elige una provincia</option>
-                          {Object.keys(PROVINCIAS_EC).map((p) => (
-                            <option key={p} value={p}>
-                              {p}
-                            </option>
-                          ))}
-                          <option value="__otra__">Otra (escribir)…</option>
-                        </select>
+                          opciones={[...opcionesTexto(Object.keys(PROVINCIAS_EC)), { valor: '__otra__', texto: 'Otra (escribir)…' }]}
+                          placeholder="Elige una provincia"
+                          textoBusqueda="Buscar provincia"
+                        />
                       )}
                       {cargandoCiudad && (
                         <span className="mt-1 block text-[11px] text-medio">
@@ -787,10 +778,10 @@ export default function DatosNegocioScreen({
                           </button>
                         </div>
                       ) : (
-                        <select
-                          value={provinciaOtro || !CANTONES_DE(provincia).includes(ciudad) ? '__otra__' : ciudad}
-                          onChange={(e) => {
-                            const valor = e.target.value;
+                        <Selector
+                          etiqueta="Ciudad"
+                          valor={CANTONES_DE(provincia).includes(ciudad) ? ciudad : ''}
+                          onCambiar={(valor) => {
                             if (valor === '__otra__') {
                               setCiudadOtro(true);
                               setCiudad('');
@@ -798,27 +789,13 @@ export default function DatosNegocioScreen({
                               setCiudad(valor);
                             }
                           }}
-                          disabled={!provincia || provinciaOtro}
-                          className={`${inputBase} appearance-none disabled:opacity-50`}
-                        >
-                          {!provincia || provinciaOtro ? (
-                            <option value="">
-                              {provinciaOtro
-                                ? 'Escribe la ciudad arriba'
-                                : 'Primero elige la provincia'}
-                            </option>
-                          ) : (
-                            <>
-                              <option value="">Elige una ciudad</option>
-                              {CANTONES_DE(provincia).map((c) => (
-                                <option key={c} value={c}>
-                                  {c}
-                                </option>
-                              ))}
-                              <option value="__otra__">Otra (escribir)…</option>
-                            </>
-                          )}
-                        </select>
+                          deshabilitado={!provincia || provinciaOtro}
+                          opciones={[...opcionesTexto(CANTONES_DE(provincia)), { valor: '__otra__', texto: 'Otra (escribir)…' }]}
+                          placeholder={
+                            provinciaOtro ? 'Escribe la ciudad arriba' : provincia ? 'Elige una ciudad' : 'Primero elige la provincia'
+                          }
+                          textoBusqueda="Buscar ciudad"
+                        />
                       )}
                     </div>
                   </div>
@@ -1048,18 +1025,14 @@ export default function DatosNegocioScreen({
                         onChange={(e) => setCierreNuevo(e.target.value)}
                         className="h-10 rounded-md border border-claro bg-white px-2 text-[13px] text-carbon focus:border-andino/70 focus:outline-none focus:ring-[3px] focus:ring-andino/15"
                       />
-                      <select
-                        value={diaQueSeAgrega}
-                        onChange={(e) => setDiaQueSeAgrega(e.target.value)}
-                        aria-label="Día personalizado"
-                        className="h-10 rounded-md border border-claro bg-white px-2.5 text-[13px] text-carbon focus:border-andino/70 focus:outline-none focus:ring-[3px] focus:ring-andino/15"
-                      >
-                        {DIAS.map((dia) => (
-                          <option key={dia} value={dia}>
-                            {dia}
-                          </option>
-                        ))}
-                      </select>
+                      <Selector
+                        etiqueta="Día personalizado"
+                        valor={diaQueSeAgrega}
+                        onCambiar={setDiaQueSeAgrega}
+                        opciones={opcionesTexto(DIAS)}
+                        buscable={false}
+                        clase="h-10 min-w-32 rounded-md border border-claro bg-white px-2.5 text-[13px] text-carbon transition-colors hover:border-medio focus:outline-none focus-visible:border-andino/70 focus-visible:ring-[3px] focus-visible:ring-andino/15"
+                      />
                       <button
                         type="button"
                         onClick={() => {

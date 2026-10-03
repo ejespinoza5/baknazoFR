@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import CargarMas from '../../components/CargarMas';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import MarcoApp from '../../components/MarcoApp';
+import RespuestasCuestionario from '../../components/RespuestasCuestionario';
+import Selector from '../../components/Selector';
 import {
   IconoBocadillo,
   IconoChevron,
@@ -17,6 +19,7 @@ import {
   retirarPostulacion,
 } from '../../api/postulaciones';
 import { notificarError, notificarExito } from '../../lib/notificar';
+import { useNavegacion } from '../../lib/navegacion';
 import { formatearBytes } from '../../lib/pdf';
 import { ESTADO_EMPLEADOR, ESTADO_POSTULANTE, TONO_ESTADO } from '../../lib/postulaciones';
 import { haceCuanto, inicialesDe } from '../../lib/tarjeta';
@@ -45,8 +48,11 @@ const ESTADOS_FILTRO: EstadoPostulacion[] = ['NUEVA', 'VISTA', 'PRESELECCIONADA'
  * enlace del correo de aviso abre directamente la vacante correcta.
  */
 export default function PostulacionesScreen() {
-  const [parametros, setParametros] = useSearchParams();
-  const vista: Vista = parametros.get('vista') === 'enviadas' ? 'enviadas' : 'recibidas';
+  // Cada cuenta tiene un solo lado: los negocios publican vacantes y reciben
+  // postulaciones; las personas se postulan y ven las que enviaron. El backend
+  // lo hace cumplir (403 en /recibidas para personas y al postular un negocio).
+  const esNegocio = useNavegacion().sesion?.usuario.tipo_cuenta === 'NEGOCIO';
+  const vista: Vista = esNegocio ? 'recibidas' : 'enviadas';
 
   return (
     <MarcoApp titulo="Postulaciones">
@@ -57,15 +63,6 @@ export default function PostulacionesScreen() {
             ? 'Las hojas de vida que llegan a tus vacantes. Revísalas, márcalas y contacta a quien te interese.'
             : 'Las vacantes a las que te postulaste y en qué va cada una.'}
         </p>
-
-        <div role="tablist" aria-label="Tipo de postulaciones" className="mt-5 flex gap-1 border-b border-border">
-          <PestanaVista activa={vista === 'recibidas'} onClick={() => setParametros({})}>
-            Recibidas
-          </PestanaVista>
-          <PestanaVista activa={vista === 'enviadas'} onClick={() => setParametros({ vista: 'enviadas' })}>
-            Enviadas
-          </PestanaVista>
-        </div>
 
         {vista === 'recibidas' ? <Recibidas /> : <Enviadas />}
       </div>
@@ -162,21 +159,17 @@ function Recibidas() {
     <div className="mt-6 grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8">
       {/* ---------- Vacantes ---------- */}
       <aside>
-        <label className="block lg:hidden">
+        <div className="lg:hidden">
           <span className="mb-1.5 block text-[13px] font-medium text-muted">Vacante</span>
-          <select
-            value={anuncio ?? ''}
-            onChange={(e) => filtrar({ anuncio: e.target.value ? Number(e.target.value) : null })}
-            className="h-11 w-full rounded-lg border border-border bg-white px-3 text-[14.5px] text-foreground"
-          >
-            <option value="">Todas las vacantes ({totalGeneral})</option>
-            {vacantes.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.titulo} ({v.total})
-              </option>
-            ))}
-          </select>
-        </label>
+          <Selector
+            etiqueta="Vacante"
+            valor={anuncio ? String(anuncio) : ''}
+            onCambiar={(v) => filtrar({ anuncio: v ? Number(v) : null })}
+            opciones={vacantes.map((v) => ({ valor: String(v.id), texto: `${v.titulo} (${v.total})` }))}
+            vacio={`Todas las vacantes (${totalGeneral})`}
+            textoBusqueda="Buscar vacante"
+          />
+        </div>
 
         <nav aria-label="Vacantes" className="hidden lg:block">
           <p className="px-3 pb-2 text-[11px] font-semibold tracking-[0.1em] text-muted uppercase">Tus vacantes</p>
@@ -336,6 +329,13 @@ function TarjetaCandidato({
         <p className="mt-3 rounded-lg bg-background/70 px-3.5 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-line text-foreground">
           {p.mensaje}
         </p>
+      )}
+
+      {p.respuestas.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-[12px] font-semibold text-muted">Respuestas al cuestionario</p>
+          <RespuestasCuestionario respuestas={p.respuestas} />
+        </div>
       )}
 
       <div className="mt-3.5 flex flex-wrap gap-2">
@@ -525,6 +525,17 @@ function Enviadas() {
               {ESTADO_POSTULANTE[p.estado]}
             </span>
           </div>
+          {p.respuestas.length > 0 && (
+            <details className="group mt-3">
+              <summary className="cursor-pointer list-none text-[13px] font-semibold text-accent hover:underline [&::-webkit-details-marker]:hidden">
+                <span className="group-open:hidden">Ver tus respuestas ({p.respuestas.length})</span>
+                <span className="hidden group-open:inline">Ocultar tus respuestas</span>
+              </summary>
+              <div className="mt-2">
+                <RespuestasCuestionario respuestas={p.respuestas} />
+              </div>
+            </details>
+          )}
           <div className="mt-3.5 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -571,24 +582,6 @@ function Enviadas() {
 }
 
 /* ================= Piezas ================= */
-
-function PestanaVista({ activa, onClick, children }: { activa: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={activa}
-      onClick={onClick}
-      className={
-        activa
-          ? '-mb-px border-b-2 border-foreground px-3 py-3 text-[14.5px] font-semibold text-foreground'
-          : '-mb-px border-b-2 border-transparent px-3 py-3 text-[14.5px] font-medium text-muted hover:text-foreground'
-      }
-    >
-      {children}
-    </button>
-  );
-}
 
 function FilaVacante({
   activa,

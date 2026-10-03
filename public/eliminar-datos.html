@@ -3,140 +3,380 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Eliminación de Datos — Baknazo</title>
+<title>Eliminar tu cuenta y tus datos · Baknazo</title>
+<meta name="description" content="Cómo pedir que Baknazo elimine tu cuenta y todos tus datos personales." />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..900&family=Geist:wght@400;500;600;700&display=swap"
+  rel="stylesheet"
+/>
 <style>
+  /* Los mismos tokens que la app (src/index.css). */
   :root {
-    --text: #6b6375;
-    --text-h: #08060d;
-    --bg: #fff;
-    --border: #e5e4e7;
-    --accent: #aa3bff;
-    --accent-bg: rgba(170, 59, 255, 0.1);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --text: #9ca3af;
-      --text-h: #f3f4f6;
-      --bg: #16171d;
-      --border: #2e303a;
-      --accent: #c084fc;
-      --accent-bg: rgba(192, 132, 252, 0.15);
-    }
+    --brand: #ffb800;
+    --brand-dark: #cc9200;
+    --accent: #0a6ebd;
+    --empleo: #ce1126;
+    --danger-deep: #c2233a;
+    --foreground: #1f2937;
+    --muted: #6b7280;
+    --background: #fafaf7;
+    --border: #e5e7eb;
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
-    font: 16px/1.6 system-ui, 'Segoe UI', Roboto, sans-serif;
-    color: var(--text);
-    background: var(--bg);
+    font: 16px/1.65 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    color: var(--foreground);
+    background: var(--background);
+    -webkit-font-smoothing: antialiased;
   }
-  main {
-    max-width: 720px;
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+  .titular {
+    font-family: 'Archivo', 'Geist', system-ui, sans-serif;
+    font-stretch: 116%;
+    font-weight: 850;
+    letter-spacing: -0.025em;
+    line-height: 0.95;
+    text-wrap: balance;
+  }
+
+  /* La franja de la bandera: amarillo, azul y rojo. */
+  .bandera { display: flex; height: 6px; }
+  .bandera span:nth-child(1) { flex: 2; background: var(--brand); }
+  .bandera span:nth-child(2) { flex: 1; background: var(--accent); }
+  .bandera span:nth-child(3) { flex: 1; background: var(--empleo); }
+
+  .cabecera {
+    max-width: 1080px;
     margin: 0 auto;
-    padding: 48px 24px 80px;
-  }
-  .marca {
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 1.6px;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 16px;
-  }
-  h1 {
-    font-size: 30px;
-    color: var(--text-h);
-    margin: 0 0 8px;
-  }
-  .fecha {
-    font-size: 14px;
-    margin-bottom: 32px;
-  }
-  h2 {
-    font-size: 19px;
-    color: var(--text-h);
-    margin: 32px 0 10px;
-  }
-  p, li { margin: 0 0 12px; }
-  ol, ul { padding-left: 20px; }
-  a { color: var(--accent); }
-  .caja {
-    margin: 24px 0;
     padding: 18px 20px;
-    border: 1px solid var(--border);
-    background: var(--accent-bg);
-    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
   }
-  .caja p:last-child { margin-bottom: 0; }
-  .aviso {
-    margin-top: 40px;
-    padding: 14px 16px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
+  .marca { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+  .sello {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(31, 41, 55, 0.25), inset 0 0 0 3.5px var(--background), inset 0 0 0 4.5px rgba(31, 41, 55, 0.25);
+  }
+  .sello img { width: 20px; height: 20px; object-fit: contain; }
+  .marca .titular { font-size: 21px; }
+  .volver {
     font-size: 14px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--brand);
+    text-decoration-thickness: 3px;
+    text-underline-offset: 6px;
+    transition: text-decoration-color 0.2s;
   }
-  code {
-    font-family: ui-monospace, Consolas, monospace;
+  .volver:hover { text-decoration-color: var(--foreground); }
+
+  main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 96px; }
+
+  .encabezado { max-width: 760px; }
+  .kicker {
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  h1 { margin: 10px 0 0; font-size: clamp(42px, 8vw, 84px); }
+  .bajada { margin: 22px 0 0; max-width: 58ch; font-size: 17.5px; color: rgba(31, 41, 55, 0.78); }
+  .fecha { margin: 14px 0 0; font-size: 13.5px; color: var(--muted); }
+
+  /* El correo: lo único que hace falta para pedirlo, bien a la vista. */
+  .correo {
+    margin-top: 44px;
+    border-radius: 28px;
+    background: var(--brand);
+    padding: 34px 28px;
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .correo::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    opacity: 0.22;
+    background-image: radial-gradient(rgba(140, 90, 0, 0.55) 1px, transparent 1.4px);
+    background-size: 18px 18px;
+  }
+  .correo p { margin: 0; }
+  .correo .etiqueta { font-size: 15px; font-weight: 600; color: rgba(31, 41, 55, 0.8); }
+  .correo .direccion {
+    display: block;
+    margin-top: 6px;
+    font-size: clamp(25px, 5.4vw, 48px);
+    text-decoration: none;
+  }
+  .correo .asunto { margin-top: 12px; font-size: 15px; color: rgba(31, 41, 55, 0.8); }
+  .acciones { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .boton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 50px;
+    padding: 0 24px;
+    border-radius: 999px;
+    border: 0;
+    font: 600 15px/1 'Geist', system-ui, sans-serif;
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.15s, background-color 0.2s, color 0.2s;
+  }
+  .boton:active { transform: scale(0.98); }
+  .boton-oscuro { background: var(--foreground); color: #fff; }
+  .boton-oscuro:hover { background: #111827; }
+  .boton-borde { background: transparent; color: var(--foreground); box-shadow: inset 0 0 0 2px rgba(31, 41, 55, 0.8); }
+  .boton-borde:hover { background: var(--foreground); color: #fff; }
+
+  section { margin-top: 72px; }
+  h2 { margin: 0 0 8px; font-size: clamp(30px, 4.6vw, 48px); }
+
+  /* Pasos: números grandes, sin cajas. */
+  .pasos { list-style: none; margin: 26px 0 0; padding: 0; }
+  .pasos li {
+    display: grid;
+    /* Columna del número fija: los textos quedan alineados aunque el 1 sea más angosto. */
+    grid-template-columns: 52px 1fr;
+    gap: 6px 22px;
+    padding: 26px 0;
+    border-top: 1px solid var(--border);
+  }
+  .pasos li:first-child { border-top: 0; padding-top: 6px; }
+  .pasos .numero {
+    font-size: clamp(54px, 8vw, 84px);
+    line-height: 0.8;
+    color: var(--brand);
+    -webkit-text-stroke: 2px var(--foreground);
+  }
+  .pasos h3 { margin: 4px 0 0; font-size: 21px; line-height: 1.25; letter-spacing: -0.01em; }
+  .pasos p { margin: 8px 0 0; max-width: 60ch; color: rgba(31, 41, 55, 0.72); }
+
+  .columnas { display: grid; gap: 48px; }
+  @media (min-width: 640px) {
+    .pasos li { grid-template-columns: 80px 1fr; gap: 6px 28px; }
+  }
+  @media (min-width: 860px) {
+    .columnas { grid-template-columns: 1fr 1fr; gap: 64px; }
+    .correo { padding: 44px 48px; }
+  }
+  .lista { list-style: none; margin: 22px 0 0; padding: 0; border-top: 2px solid var(--foreground); }
+  .lista li { padding: 14px 0; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: baseline; }
+  .lista li::before {
+    content: '';
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--empleo);
+    transform: translateY(-1px);
+  }
+  .lista.conserva li::before { background: var(--accent); }
+  .lista strong { font-weight: 600; }
+  .nota { margin-top: 14px; font-size: 14.5px; color: var(--muted); }
+
+  .otras { margin-top: 72px; padding-top: 28px; border-top: 1px solid var(--border); color: rgba(31, 41, 55, 0.75); }
+  .otras p { margin: 0 0 12px; max-width: 70ch; }
+  .enlace {
+    font-weight: 600;
+    color: var(--foreground);
+    text-decoration: underline;
+    text-decoration-color: var(--brand);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+
+  footer { border-top: 1px solid var(--border); }
+  footer div {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 22px 20px 30px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px;
     font-size: 13px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: var(--border);
-    color: var(--text-h);
+    color: var(--muted);
+  }
+
+  .copiado { font-size: 14px; font-weight: 600; color: var(--foreground); align-self: center; opacity: 0; transition: opacity 0.2s; }
+  .copiado.visible { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
   }
 </style>
 </head>
 <body>
+<div class="bandera" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<header class="cabecera">
+  <a class="marca" href="/" aria-label="Baknazo, ir al inicio">
+    <span class="sello"><img src="/logo-baknazo.png" alt="" /></span>
+    <span class="titular">Baknazo</span>
+  </a>
+  <a class="volver" href="/">Volver a Baknazo</a>
+</header>
+
 <main>
-  <div class="marca">Baknazo</div>
-  <h1>Cómo eliminar tus datos</h1>
-  <p class="fecha">Última actualización: 8 de septiembre de 2026</p>
+  <div class="encabezado">
+    <p class="kicker">Tus datos, tu decisión</p>
+    <h1 class="titular">Eliminar tu cuenta y tus datos</h1>
+    <p class="bajada">
+      Puedes pedir en cualquier momento que borremos tu cuenta de Baknazo y todo lo que
+      guardamos de ti, sin importar si entraste con Google o con tu correo y contraseña.
+    </p>
+    <p class="fecha">Última actualización: 2 de octubre de 2026</p>
+  </div>
 
-  <p>
-    Si iniciaste sesión en Baknazo usando tu cuenta de Google, o si
-    creaste una cuenta manualmente, tienes derecho a solicitar la eliminación
-    completa de tu cuenta y de todos los datos asociados en cualquier momento.
-  </p>
+  <div class="correo">
+    <p class="etiqueta">Escríbenos a</p>
+    <a
+      class="direccion titular"
+      href="mailto:baknazoplace@gmail.com?subject=Eliminar%20mis%20datos&body=Hola%20equipo%20de%20Baknazo%2C%0A%0AQuiero%20que%20eliminen%20mi%20cuenta%20y%20todos%20mis%20datos.%0A%0ACorreo%20con%20el%20que%20me%20registr%C3%A9%3A%20"
+      >baknazoplace<wbr />@gmail.com</a
+    >
+    <p class="asunto">Con el asunto <strong>«Eliminar mis datos»</strong>, desde el correo con el que te registraste.</p>
+    <div class="acciones">
+      <a
+        class="boton boton-oscuro"
+        href="mailto:baknazoplace@gmail.com?subject=Eliminar%20mis%20datos&body=Hola%20equipo%20de%20Baknazo%2C%0A%0AQuiero%20que%20eliminen%20mi%20cuenta%20y%20todos%20mis%20datos.%0A%0ACorreo%20con%20el%20que%20me%20registr%C3%A9%3A%20"
+        >Escribir el correo</a
+      >
+      <button class="boton boton-borde" type="button" id="copiar">Copiar la dirección</button>
+      <span class="copiado" id="copiado" role="status" aria-live="polite"></span>
+    </div>
+  </div>
 
-  <h2>Pasos para solicitar la eliminación</h2>
-  <ol>
-    <li>
-      Envía un correo a
-      <a href="mailto:soporte@baknazo.com?subject=Eliminar%20mis%20datos">soporte@baknazo.com</a>
-      con el asunto <strong>"Eliminar mis datos"</strong>.
-    </li>
-    <li>
-      Incluye en el correo el <strong>correo electrónico con el que te registraste</strong>
-      en Baknazo (el mismo que usa tu cuenta de Google, si iniciaste sesión con
-      esa opción).
-    </li>
-    <li>
-      Procesaremos tu solicitud y eliminaremos tu cuenta junto con todos los
-      datos asociados (nombres, apellidos, correo y tipo de cuenta) dentro de un
-      plazo máximo de <strong>15 días hábiles</strong>.
-    </li>
-    <li>
-      Te confirmaremos por correo cuando el proceso haya finalizado.
-    </li>
-  </ol>
+  <section aria-labelledby="titulo-pasos">
+    <h2 class="titular" id="titulo-pasos">Cómo funciona</h2>
+    <ol class="pasos">
+      <li>
+        <span class="numero titular" aria-hidden="true">1</span>
+        <div>
+          <h3>Nos escribes</h3>
+          <p>
+            Envía un correo a <a class="enlace" href="mailto:baknazoplace@gmail.com?subject=Eliminar%20mis%20datos">baknazoplace@gmail.com</a>
+            con el asunto «Eliminar mis datos». Escríbenos desde el correo de tu cuenta, o indícalo en el mensaje,
+            para saber qué cuenta es.
+          </p>
+        </div>
+      </li>
+      <li>
+        <span class="numero titular" aria-hidden="true">2</span>
+        <div>
+          <h3>Confirmamos que eres tú</h3>
+          <p>
+            Para que nadie pueda borrar la cuenta de otra persona, podemos pedirte que confirmes la solicitud
+            desde ese mismo correo. Nunca te pediremos tu contraseña.
+          </p>
+        </div>
+      </li>
+      <li>
+        <span class="numero titular" aria-hidden="true">3</span>
+        <div>
+          <h3>Borramos todo y te avisamos</h3>
+          <p>
+            Eliminamos tu cuenta y tus datos en un plazo máximo de <strong>15 días hábiles</strong> y te escribimos
+            cuando esté hecho. Es definitivo: después no se puede recuperar.
+          </p>
+        </div>
+      </li>
+    </ol>
+  </section>
 
-  <h2>Qué se elimina exactamente</h2>
-  <ul>
-    <li>Tu perfil: nombres, apellidos, correo electrónico.</li>
-    <li>Tu contraseña cifrada (si te registraste manualmente).</li>
-    <li>El tipo de cuenta asociado (Persona o Negocio).</li>
-    <li>Los tokens de sesión activos.</li>
-  </ul>
+  <section class="columnas" aria-label="Qué datos se eliminan">
+    <div>
+      <h2 class="titular">Qué se elimina</h2>
+      <ul class="lista">
+        <li><span><strong>Tu perfil:</strong> nombres, apellidos, correo, teléfono, foto y portada.</span></li>
+        <li><span><strong>Tu negocio,</strong> si lo tienes: nombre, logo, dirección y horarios.</span></li>
+        <li><span><strong>Tus anuncios</strong> con todas sus fotos.</span></li>
+        <li><span><strong>Tus conversaciones</strong> del chat y tus mensajes con soporte.</span></li>
+        <li><span><strong>Tus postulaciones</strong> y las hojas de vida que subiste.</span></li>
+        <li><span><strong>Tu actividad:</strong> guardados, me gusta, seguidores y notificaciones.</span></li>
+        <li><span><strong>Tu acceso:</strong> contraseña cifrada, sesiones abiertas y avisos push.</span></li>
+      </ul>
+    </div>
+    <div>
+      <h2 class="titular">Qué podemos conservar</h2>
+      <ul class="lista conserva">
+        <li><span>El registro de que aceptaste los términos y la política de privacidad, que la ley nos pide poder demostrar.</span></li>
+        <li><span>Reportes de fraude o de contenido prohibido, solo si hacen falta por seguridad o ante una autoridad.</span></li>
+      </ul>
+      <p class="nota">
+        Lo guardamos solo el tiempo que la ley exige y sin usarlo para nada más, como establece la Ley Orgánica de
+        Protección de Datos Personales del Ecuador.
+      </p>
+    </div>
+  </section>
 
-  <p>
-    Para más detalles sobre el tratamiento de tus datos, consulta nuestra
-    <a href="/privacidad.html">Política de Privacidad</a>.
-  </p>
-
-  <div class="aviso">
-    Nota interna: reemplaza <code>soporte@baknazo.com</code> por tu correo de
-    contacto real, y ajusta el plazo de 15 días hábiles si tu proceso real es
-    distinto, antes de publicar esta página.
+  <div class="otras">
+    <p>
+      <strong>¿Entraste con Google?</strong> Además de pedirnos la eliminación, puedes quitarle a Baknazo el acceso a tu
+      cuenta de Google desde
+      <a class="enlace" href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">myaccount.google.com/permissions</a>.
+    </p>
+    <p>
+      Para saber cómo tratamos tus datos, lee nuestra
+      <a class="enlace" href="/privacidad.html">Política de Privacidad</a>.
+    </p>
   </div>
 </main>
+
+<footer>
+  <div>
+    <span>© Baknazo · Hecho en Ecuador</span>
+    <span>Contacto: <a class="enlace" href="mailto:baknazoplace@gmail.com">baknazoplace@gmail.com</a></span>
+  </div>
+</footer>
+
+<script>
+  // Copia el correo al portapapeles y lo dice al lado del botón.
+  (function () {
+    var boton = document.getElementById('copiar');
+    var aviso = document.getElementById('copiado');
+    var correo = 'baknazoplace@gmail.com';
+    function mostrar(texto) {
+      aviso.textContent = texto;
+      aviso.classList.add('visible');
+      clearTimeout(mostrar.t);
+      mostrar.t = setTimeout(function () {
+        aviso.classList.remove('visible');
+      }, 2200);
+    }
+    boton.addEventListener('click', function () {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(correo).then(
+          function () { mostrar('Copiado'); },
+          function () { mostrar(correo); }
+        );
+      } else {
+        mostrar(correo);
+      }
+    });
+  })();
+</script>
 </body>
 </html>

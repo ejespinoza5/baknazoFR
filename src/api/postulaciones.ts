@@ -4,6 +4,7 @@ import type {
   PostulacionRecibida,
   RespuestaEnviadas,
   RespuestaRecibidas,
+  RespuestaVacantes,
 } from '../types/anuncio';
 
 /**
@@ -14,12 +15,16 @@ import type {
  */
 export function postular(
   anuncioId: number,
-  datos: { cv: File; mensaje?: string; telefono?: string }
+  datos: { cv: File; mensaje?: string; telefono?: string; respuestas?: Record<string, string> }
 ): Promise<{ id: number; estado: EstadoPostulacion }> {
   const form = new FormData();
   form.append('cv', datos.cv, datos.cv.name);
   if (datos.mensaje?.trim()) form.append('mensaje', datos.mensaje.trim());
   if (datos.telefono?.trim()) form.append('telefono', datos.telefono.trim());
+  // Las respuestas del cuestionario, por id de pregunta (el backend las valida).
+  if (datos.respuestas && Object.keys(datos.respuestas).length > 0) {
+    form.append('respuestas', JSON.stringify(datos.respuestas));
+  }
   return enviarAutenticado(`/api/anuncios/${anuncioId}/postulaciones`, 'POST', form);
 }
 
@@ -32,6 +37,11 @@ export function listarRecibidas(
   if (filtros.offset) q.set('offset', String(filtros.offset));
   const texto = q.toString();
   return enviarAutenticado(`/api/postulaciones/recibidas${texto ? `?${texto}` : ''}`, 'GET');
+}
+
+/** Solo negocios: sus vacantes con el anuncio y las cifras de candidatos. */
+export function listarVacantes(): Promise<RespuestaVacantes> {
+  return enviarAutenticado('/api/postulaciones/vacantes', 'GET');
 }
 
 export function listarEnviadas(offset = 0): Promise<RespuestaEnviadas> {

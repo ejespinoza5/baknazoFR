@@ -5,6 +5,7 @@ import type {
   DetalleEmpleo,
   DetalleProducto,
   DetalleServicio,
+  PreguntaEmpleo,
 } from '../types/anuncio';
 
 /**
@@ -29,7 +30,11 @@ export type ErrorCampo =
   | 'ciudad'
   | 'precio'
   | 'fotos'
+  | 'preguntas'
   | ClaveDetalle;
+
+/** Cómo se postulan a una vacante: solo con el CV, o respondiendo un cuestionario. */
+export type ModoPostulacion = 'rapida' | 'cuestionario';
 
 export interface Formulario {
   titulo: string;
@@ -41,6 +46,9 @@ export interface Formulario {
   modalidadCobro: string;
   jornada: string;
   modalidad: string;
+  /** Solo empleo. Al pasar a rápida las preguntas se conservan por si vuelve. */
+  modoPostulacion: ModoPostulacion;
+  preguntas: PreguntaEmpleo[];
   /** Solo al publicar: al editar las fotos guardadas no son `File`. */
   fotos: (File | null)[];
   /**
@@ -96,6 +104,8 @@ export const formularioVacio = (
   modalidadCobro: '',
   jornada: '',
   modalidad: '',
+  modoPostulacion: 'rapida',
+  preguntas: [],
   fotos: Array.from({ length: maxFotos }, () => null),
   mostrarTelefono,
 });
@@ -120,6 +130,8 @@ export function formularioDesdeAnuncio(anuncio: Anuncio, maxFotos: number): Form
       'modalidadCobro' in detalle ? String(detalle.modalidadCobro ?? '') : '',
     jornada: 'jornada' in detalle ? String(detalle.jornada ?? '') : '',
     modalidad: 'modalidad' in detalle ? String(detalle.modalidad ?? '') : '',
+    modoPostulacion: preguntasDe(detalle).length > 0 ? 'cuestionario' : 'rapida',
+    preguntas: preguntasDe(detalle),
     fotos: Array.from({ length: maxFotos }, () => null),
     // Un anuncio guardado antes de que existiera este campo no trae nada: se
     // deja en `false`, que es lo más prudente cuando se trata de un teléfono.
@@ -152,11 +164,72 @@ export function mapearErrores(
     ['detalle.modalidadCobro', 'modalidadCobro'],
     ['detalle.jornada', 'jornada'],
     ['detalle.modalidad', 'modalidad'],
+    ['detalle.preguntas', 'preguntas'],
   ];
   for (const [origen, campo] of pares) {
     if (errores[origen]) destino[campo] = errores[origen];
   }
   return destino;
+}
+
+/* ---------- Cuestionario de las vacantes ---------- */
+
+/** Mismos límites que el backend (`utils/cuestionario.js`). */
+export const CUESTIONARIO = {
+  maxPreguntas: 8,
+  preguntaMin: 3,
+  preguntaMax: 200,
+  opcionesMin: 2,
+  opcionesMax: 6,
+  opcionMax: 80,
+  respuestaMax: 1000,
+} as const;
+
+function preguntasDe(detalle: Partial<Detalle>): PreguntaEmpleo[] {
+  const lista = 'preguntas' in detalle && Array.isArray(detalle.preguntas) ? detalle.preguntas : [];
+  return lista.map((p) => ({ ...p, opciones: p.tipo === 'OPCION' ? [...(p.opciones ?? [])] : undefined }));
+}
+
+/** Un id corto como los del servidor: así se reconoce la pregunta al editarla. */
+export function nuevoIdPregunta(): string {
+  return Math.random().toString(36).slice(2, 10).padEnd(8, '0');
+}
+
+/** Sin espacios de más ni opciones vacías: lo que de verdad se envía. */
+export function limpiarPreguntas(preguntas: PreguntaEmpleo[]): PreguntaEmpleo[] {
+  return preguntas.map((p) => ({
+    id: p.id,
+    texto: p.texto.replace(/\s+/g, ' ').trim(),
+    tipo: p.tipo,
+    obligatoria: p.obligatoria,
+    ...(p.tipo === 'OPCION'
+      ? { opciones: (p.opciones ?? []).map((o) => o.replace(/\s+/g, ' ').trim()).filter(Boolean) }
+      : {}),
+  }));
+}
+
+/**
+ * Para saber si las preguntas cambiaron al editar. No vale comparar el JSON:
+ * la base guarda las claves en otro orden.
+ */
+export function firmaPreguntas(preguntas: PreguntaEmpleo[] | undefined): string {
+  return limpiarPreguntas(preguntas ?? [])
+    .map((p) => [p.id, p.texto, p.tipo, p.obligatoria ? 1 : 0, (p.opciones ?? []).join('\u0001')].join('\u0002'))
+    .join('\u0003');
+}
+
+/** El primer problema del cuestionario, dicho como lo diría el backend. */
+export function problemaCuestionario(preguntas: PreguntaEmpleo[]): string | null {
+  if (preguntas.length === 0) return 'Agrega al menos una pregunta, o elige postulación rápida.';
+  for (const [i, p] of limpiarPreguntas(preguntas).entries()) {
+    const n = `Pregunta ${i + 1}`;
+    if (p.texto.length < CUESTIONARIO.preguntaMin) return `${n}: escribe la pregunta.`;
+    if (p.tipo === 'OPCION') {
+      const distintas = new Set((p.opciones ?? []).map((o) => o.toLowerCase()));
+      if (distintas.size < CUESTIONARIO.opcionesMin) return `${n}: agrega al menos ${CUESTIONARIO.opcionesMin} opciones distintas.`;
+    }
+  }
+  return null;
 }
 
 /** El backend acepta "320,50" y "320.50"; se normaliza a punto. */
@@ -179,6 +252,7 @@ export function detalleDeFormulario(pilar: Pilar, form: Formulario): Detalle {
   return {
     jornada: form.jornada as DetalleEmpleo['jornada'],
     modalidad: form.modalidad as DetalleEmpleo['modalidad'],
+    preguntas: form.modoPostulacion === 'cuestionario' ? limpiarPreguntas(form.preguntas) : [],
   };
 }
 
@@ -218,6 +292,11 @@ export function validarFormulario(
 
   if (fotoObligatoria(pilar) && cuantoFotos === 0)
     found.fotos = 'Un producto necesita al menos una foto.';
+
+  if (pilar === 'empleo' && form.modoPostulacion === 'cuestionario') {
+    const problema = problemaCuestionario(form.preguntas);
+    if (problema) found.preguntas = problema;
+  }
 
   return found;
 }

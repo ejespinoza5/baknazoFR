@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import BaknazoLoader from './BaknazoLoader';
 import { IconoCerrar, IconoPin } from './Iconos';
+import Selector from './Selector';
+import { opcionesProvincia } from '../lib/opcionesSelector';
 import { useBloqueoScroll } from '../lib/bloqueoScroll';
 import { categoriasDe } from '../lib/catalogos';
 import {
@@ -103,18 +105,14 @@ export default function PanelFiltros({
             {borrador.pilar && categorias.length > 0 && (
               <label className="mt-4 block">
                 <span className="mb-1.5 block text-[13px] font-medium text-muted">Categoría</span>
-                <select
-                  value={borrador.categoria ?? ''}
-                  onChange={(e) => poner({ categoria: e.target.value ? Number(e.target.value) : null })}
-                  className={SELECT}
-                >
-                  <option value="">Todas las categorías</option>
-                  {categorias.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
+                <Selector
+                  etiqueta="Categoría"
+                  valor={borrador.categoria ? String(borrador.categoria) : ''}
+                  onCambiar={(v) => poner({ categoria: v ? Number(v) : null })}
+                  opciones={categorias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
+                  vacio="Todas las categorías"
+                  textoBusqueda="Buscar categoría"
+                />
               </label>
             )}
           </Seccion>
@@ -155,34 +153,27 @@ export default function PanelFiltros({
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1.5 block text-[13px] font-medium text-muted">Provincia</span>
-                <select
-                  value={borrador.provincia ?? ''}
-                  onChange={(e) => poner({ provincia: e.target.value || null, canton: null })}
-                  className={SELECT}
-                >
-                  <option value="">Todo Ecuador</option>
-                  {catalogos?.provincias.map((p) => (
-                    <option key={p.codigo} value={p.codigo}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
+                <Selector
+                  etiqueta="Provincia"
+                  valor={borrador.provincia ?? ''}
+                  onCambiar={(v) => poner({ provincia: v || null, canton: null })}
+                  opciones={catalogos ? opcionesProvincia(catalogos) : []}
+                  vacio="Todo Ecuador"
+                  textoBusqueda="Buscar provincia"
+                />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-[13px] font-medium text-muted">Ciudad</span>
-                <select
-                  value={borrador.canton ?? ''}
-                  onChange={(e) => poner({ canton: e.target.value || null })}
-                  disabled={!provincia}
-                  className={SELECT}
-                >
-                  <option value="">{provincia ? 'Toda la provincia' : 'Elige provincia'}</option>
-                  {provincia?.cantones.map((c) => (
-                    <option key={c.codigo} value={c.codigo}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
+                <Selector
+                  etiqueta="Ciudad"
+                  valor={borrador.canton ?? ''}
+                  onCambiar={(v) => poner({ canton: v || null })}
+                  deshabilitado={!provincia}
+                  opciones={provincia?.cantones.map((c) => ({ valor: c.codigo, texto: c.nombre })) ?? []}
+                  vacio={provincia ? 'Toda la provincia' : 'Elige provincia'}
+                  placeholder="Elige provincia"
+                  textoBusqueda="Buscar ciudad"
+                />
               </label>
             </div>
           </Seccion>
@@ -295,8 +286,6 @@ export default function PanelFiltros({
   );
 }
 
-const SELECT =
-  'h-11 w-full rounded-lg border border-border bg-white px-3 text-[14.5px] text-foreground focus:border-accent/70 focus:outline-none focus:ring-[3px] focus:ring-accent/15 disabled:bg-background disabled:text-muted';
 
 function Seccion({ titulo, ayuda, children }: { titulo: string; ayuda?: string; children: ReactNode }) {
   return (

@@ -26,7 +26,7 @@ import {
   IconoReloj,
   IconoTelefono,
 } from '../../components/Iconos';
-import { CHAT_PENDIENTE } from '../../lib/contacto';
+import { useAbrirChat } from '../../lib/abrirChat';
 import { notificarError, notificarExito, notificarInfo } from '../../lib/notificar';
 import { actualizarPerfil } from '../../api/auth';
 import { darLike, quitarLike } from '../../api/anuncios';
@@ -64,6 +64,9 @@ const LIMITE_ANUNCIOS = 20;
 
 /** Tamaño máximo de la portada antes de recortarla, igual que en el backend. */
 const MAX_PORTADA_BYTES = 8 * 1024 * 1024;
+const AYUDA_PORTADA =
+  'Se guarda en 1500 × 500 px (formato 3:1). Usa una imagen de al menos ese tamaño: JPG, PNG o WEBP de hasta 8 MB.';
+const AYUDA_FOTO = 'Se guarda en 512 × 512 px. JPG, PNG o WEBP de hasta 8 MB; una foto cuadrada se ve mejor.';
 
 type Relacion = 'SEGUIDORES' | 'SEGUIDOS';
 
@@ -84,6 +87,7 @@ export default function PerfilScreen({
   const navegar = useNavigate();
   const ubicacion = useLocation();
   const { irAlLogin, irAPublicar } = useNavegacion();
+  const { abrir: abrirChat, abriendo: abriendoChat } = useAbrirChat();
   const [parametros, setParametros] = useSearchParams();
 
   /**
@@ -373,7 +377,21 @@ export default function PerfilScreen({
         <div className="px-4 sm:px-2">
           {/* ---------- Identidad ---------- */}
           <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
-            <Avatar perfil={perfil} />
+            {propio ? (
+              <AvatarEditable
+                perfil={perfil}
+                onCambio={(usuario) => {
+                  const nueva =
+                    perfil.tipo === 'NEGOCIO'
+                      ? (usuario.negocio?.logo_url_completa ?? usuario.negocio?.logo_url ?? usuario.foto_perfil_url ?? usuario.foto_perfil ?? null)
+                      : (usuario.foto_perfil_url ?? usuario.foto_perfil ?? null);
+                  setPerfil((prev) => (prev ? { ...prev, foto: nueva } : prev));
+                  onPerfilActualizado?.(usuario);
+                }}
+              />
+            ) : (
+              <Avatar perfil={perfil} />
+            )}
 
             <div className="min-w-0 flex-1 basis-60 pt-2 sm:pb-1">
               <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[22px] leading-tight font-semibold tracking-tight sm:text-[28px]">
@@ -457,7 +475,19 @@ export default function PerfilScreen({
                     onClick={alternarSeguir}
                   />
                 )}
-                {negocio && ve('contacto_negocio') && negocio.whatsapp ? (
+                {/* El chat va siempre, también junto al WhatsApp de un negocio:
+                    antes lo reemplazaba y no había forma de escribir por Baknazo.
+                    En la vista previa de tu propio perfil se muestra apagado,
+                    porque nadie puede escribirse a sí mismo. Se usa el id del
+                    perfil cargado y no el de la URL. */}
+                <BotonSecundario
+                  icono={<IconoBocadillo />}
+                  onClick={() => void abrirChat({ usuarioId: perfil.id })}
+                  deshabilitado={esPropio || abriendoChat}
+                >
+                  {abriendoChat ? 'Abriendo' : 'Mensaje'}
+                </BotonSecundario>
+                {negocio && ve('contacto_negocio') && negocio.whatsapp && (
                   <a
                     href={enlaceWhatsapp(negocio.whatsapp)}
                     target="_blank"
@@ -467,13 +497,6 @@ export default function PerfilScreen({
                     <IconoBocadillo />
                     WhatsApp
                   </a>
-                ) : (
-                  <BotonSecundario
-                    icono={<IconoBocadillo />}
-                    onClick={() => notificarInfo(CHAT_PENDIENTE)}
-                  >
-                    Mensaje
-                  </BotonSecundario>
                 )}
                 {negocio && ve('contacto_negocio') && negocio.telefono && (
                   <a
@@ -701,12 +724,14 @@ function Portada({
             </button>
           ) : (
             <label
+              title="Recomendado: 1500 × 500 px (3:1). JPG, PNG o WEBP, hasta 8 MB."
               className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg bg-carbon/70 px-3 text-[13px] font-medium text-white transition-colors hover:bg-carbon/85 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent ${
                 subiendo ? 'pointer-events-none opacity-50' : ''
               }`}
             >
               <IconoCamara />
               Añadir portada
+              <span className="hidden text-white/70 sm:inline">· 1500 × 500 px</span>
               <input type="file" accept="image/*" className="sr-only" onChange={elegir} disabled={subiendo} />
             </label>
           )}
@@ -716,8 +741,11 @@ function Portada({
               <div className="fixed inset-0 z-30" aria-hidden="true" onClick={() => setMenu(false)} />
               <div
                 role="menu"
-                className="animate-bkn-in absolute right-0 bottom-11 z-40 w-52 overflow-hidden rounded-xl border border-border bg-white shadow-[0_18px_40px_-20px_rgba(31,41,55,0.45)]"
+                className="animate-bkn-in absolute right-0 bottom-11 z-40 w-64 overflow-hidden rounded-xl border border-border bg-white shadow-[0_18px_40px_-20px_rgba(31,41,55,0.45)]"
               >
+                <p className="border-b border-border bg-background/70 px-4 py-2.5 text-[11.5px] leading-snug text-muted">
+                  Recomendado: 1500 × 500 px (3:1). JPG, PNG o WEBP, hasta 8 MB.
+                </p>
                 <label
                   role="menuitem"
                   className="flex cursor-pointer items-center gap-2.5 px-4 py-3 text-[13.5px] font-medium text-foreground hover:bg-background"
@@ -749,7 +777,144 @@ function Portada({
           forma="rectangular"
           formatos={['3/1']}
           tamanoSalida={1500}
+          ayuda={AYUDA_PORTADA}
           onRecortada={subir}
+          onCancelar={() => setBruto(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * La foto del perfil propio, con un botón de cámara encima para cambiarla sin
+ * pasar por Configuración. En un negocio la foto que se ve es su logo, así que
+ * es el logo lo que se cambia.
+ */
+function AvatarEditable({ perfil, onCambio }: { perfil: PerfilPublico; onCambio: (usuario: PerfilUsuario) => void }) {
+  const esNegocio = perfil.tipo === 'NEGOCIO';
+  const [bruto, setBruto] = useState<File | null>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const nombre = esNegocio ? 'el logo' : 'la foto';
+
+  const elegir = (evento: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = evento.target.files?.[0] ?? null;
+    evento.target.value = '';
+    setMenu(false);
+    if (!archivo) return;
+    if (!/^image\/(jpeg|png|webp|avif)$/.test(archivo.type)) {
+      notificarError('Elige una imagen JPG, PNG, WEBP o AVIF.');
+      return;
+    }
+    if (archivo.size > MAX_PORTADA_BYTES) {
+      notificarError('La imagen no puede superar los 8 MB.');
+      return;
+    }
+    setBruto(archivo);
+  };
+
+  const guardar = async (cambio: { archivo?: File; quitar?: boolean }) => {
+    setBruto(null);
+    setMenu(false);
+    setSubiendo(true);
+    try {
+      const imagenes = esNegocio
+        ? cambio.quitar
+          ? { eliminarLogo: true }
+          : { logo: cambio.archivo }
+        : cambio.quitar
+          ? { eliminarFotoPerfil: true }
+          : { fotoPerfil: cambio.archivo };
+      const respuesta = await actualizarPerfil({}, imagenes);
+      onCambio(respuesta.usuario);
+      notificarExito(cambio.quitar ? `Quitaste ${nombre}.` : esNegocio ? 'Logo actualizado.' : 'Foto actualizada.');
+    } catch (e) {
+      notificarError(e instanceof Error ? e.message : `No se pudo guardar ${nombre}.`);
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
+  const entrada = <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="sr-only" onChange={elegir} />;
+
+  return (
+    <div className="relative shrink-0">
+      <Avatar perfil={perfil} />
+      {subiendo && (
+        <span className="absolute inset-0 -mt-10 grid place-items-center rounded-full bg-carbon/45 sm:-mt-14">
+          <BaknazoLoader tamano="boton" />
+        </span>
+      )}
+      {perfil.foto ? (
+        <button
+          type="button"
+          onClick={() => setMenu((m) => !m)}
+          disabled={subiendo}
+          aria-haspopup="menu"
+          aria-expanded={menu}
+          aria-label={`Cambiar ${nombre} del perfil`}
+          title={`Cambiar ${nombre}`}
+          className="absolute right-0 bottom-0 grid size-9 place-items-center rounded-full bg-carbon text-white shadow-md ring-3 ring-background transition-colors hover:bg-carbon/85 disabled:opacity-50 sm:right-1 sm:bottom-1"
+        >
+          <IconoCamara />
+        </button>
+      ) : (
+        <label
+          aria-label={`Añadir ${nombre} del perfil`}
+          title={`Añadir ${nombre}`}
+          className={`absolute right-0 bottom-0 grid size-9 cursor-pointer place-items-center rounded-full bg-carbon text-white shadow-md ring-3 ring-background transition-colors hover:bg-carbon/85 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent sm:right-1 sm:bottom-1 ${
+            subiendo ? 'pointer-events-none opacity-50' : ''
+          }`}
+        >
+          <IconoCamara />
+          {entrada}
+        </label>
+      )}
+
+      {menu && (
+        <>
+          <div className="fixed inset-0 z-30" aria-hidden="true" onClick={() => setMenu(false)} />
+          <div
+            role="menu"
+            className="animate-bkn-in absolute top-full left-0 z-40 mt-2 w-64 overflow-hidden rounded-xl border border-border bg-white shadow-[0_18px_40px_-20px_rgba(31,41,55,0.45)]"
+          >
+            <p className="border-b border-border bg-background/70 px-4 py-2.5 text-[11.5px] leading-snug text-muted">
+              Cuadrada, al menos 512 × 512 px. JPG, PNG o WEBP, hasta 8 MB.
+            </p>
+            <label
+              role="menuitem"
+              className="flex cursor-pointer items-center gap-2.5 px-4 py-3 text-[13.5px] font-medium text-foreground hover:bg-background"
+            >
+              <span className="text-muted">
+                <IconoCamara />
+              </span>
+              {esNegocio ? 'Cambiar logo' : 'Cambiar foto de perfil'}
+              {entrada}
+            </label>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => void guardar({ quitar: true })}
+              className="flex w-full items-center gap-2.5 border-t border-border px-4 py-3 text-left text-[13.5px] font-medium text-danger-deep hover:bg-danger/[0.04]"
+            >
+              <IconoPapelera />
+              {esNegocio ? 'Quitar logo' : 'Quitar foto'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {bruto && (
+        <RecortadorImagen
+          imagen={bruto}
+          // El logo se recorta cuadrado (sin máscara): un logo con bordes
+          // transparentes en círculo perdería sus esquinas.
+          forma={esNegocio ? 'rectangular' : 'circulo'}
+          formatos={['1/1']}
+          tamanoSalida={512}
+          ayuda={AYUDA_FOTO}
+          onRecortada={(archivo) => void guardar({ archivo })}
           onCancelar={() => setBruto(null)}
         />
       )}
@@ -1082,16 +1247,19 @@ function BotonSecundario({
   icono,
   children,
   onClick,
+  deshabilitado = false,
 }: {
   icono: ReactNode;
   children: ReactNode;
   onClick?: () => void;
+  deshabilitado?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-11 min-w-0 flex-1 basis-36 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-[14px] font-semibold text-foreground transition-colors hover:border-muted"
+      disabled={deshabilitado}
+      className="inline-flex h-11 min-w-0 flex-1 basis-36 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-[14px] font-semibold text-foreground transition-colors hover:border-muted disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border"
     >
       {icono}
       <span className="truncate">{children}</span>

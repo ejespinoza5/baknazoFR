@@ -13,6 +13,8 @@ import {
 } from './negocio';
 import { etiqueta, inputBase, tituloSeccion } from './ui';
 import BaknazoLoader from '../../components/BaknazoLoader';
+import Selector from '../../components/Selector';
+import { opcionesTexto } from '../../lib/opcionesSelector';
 
 const PRESETS_HORARIO: { clave: string; etiqueta: string; dias: string[] }[] = [
   { clave: 'lun-vie', etiqueta: 'Lunes a Viernes', dias: DIAS.slice(0, 5) },
@@ -213,35 +215,29 @@ export default function FormularioNegocio({
             />
           </label>
 
-          <label className="block">
+          <div>
             <span className={etiqueta}>Categoría *</span>
-            <select
-              value={estado.categoria}
-              onChange={(e) => set('categoria', e.target.value)}
-              disabled={
-                deshabilitado || Boolean(errorCategorias) || !categorias.length
-              }
-              className={`${inputBase} appearance-none disabled:opacity-50`}
-            >
-              <option value="">
-                {errorCategorias
+            <Selector
+              etiqueta="Categoría del negocio"
+              valor={String(estado.categoria ?? '')}
+              onCambiar={(v) => set('categoria', v)}
+              opciones={categorias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
+              deshabilitado={deshabilitado || Boolean(errorCategorias) || !categorias.length}
+              placeholder={
+                errorCategorias
                   ? 'No se pudieron cargar las categorías'
                   : categorias.length
                     ? 'Elige una categoría'
-                    : 'Cargando categorías…'}
-              </option>
-              {categorias.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
+                    : 'Cargando categorías…'
+              }
+              textoBusqueda="Buscar categoría"
+            />
             {errorCategorias && (
               <p className="mt-1.5 text-[12px] text-danger">
                 {errorCategorias}
               </p>
             )}
-          </label>
+          </div>
 
           <label className="block">
             <span className={etiqueta}>
@@ -514,10 +510,10 @@ export default function FormularioNegocio({
                   </button>
                 </div>
               ) : (
-                <select
-                  value={estado.provincia}
-                  onChange={(e) => {
-                    const valor = e.target.value;
+                <Selector
+                  etiqueta="Provincia"
+                  valor={estado.provincia}
+                  onCambiar={(valor) => {
                     if (valor === '__otra__') {
                       onCambio({
                         provinciaOtro: true,
@@ -533,17 +529,11 @@ export default function FormularioNegocio({
                       ciudadOtro: false,
                     });
                   }}
-                  disabled={deshabilitado}
-                  className={`${inputBase} appearance-none`}
-                >
-                  <option value="">Elige una provincia</option>
-                  {Object.keys(PROVINCIAS_EC).map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                  <option value="__otra__">Otra (escribir)…</option>
-                </select>
+                  deshabilitado={deshabilitado}
+                  opciones={[...opcionesTexto(Object.keys(PROVINCIAS_EC)), { valor: '__otra__', texto: 'Otra (escribir)…' }]}
+                  placeholder="Elige una provincia"
+                  textoBusqueda="Buscar provincia"
+                />
               )}
             </div>
             <div>
@@ -570,35 +560,21 @@ export default function FormularioNegocio({
                   </button>
                 </div>
               ) : (
-                <select
-                  value={
-                    !estado.provincia ||
-                    estado.provinciaOtro ||
-                    !CANTONES_DE(estado.provincia).includes(estado.ciudad)
-                      ? '__otra__'
-                      : estado.ciudad
-                  }
-                  onChange={(e) => {
-                    const valor = e.target.value;
+                <Selector
+                  etiqueta="Ciudad"
+                  valor={CANTONES_DE(estado.provincia).includes(estado.ciudad) ? estado.ciudad : ''}
+                  onCambiar={(valor) => {
                     if (valor === '__otra__') {
                       onCambio({ ciudadOtro: true, ciudad: '' });
                     } else {
                       onCambio({ ciudad: valor, ciudadOtro: false });
                     }
                   }}
-                  disabled={
-                    deshabilitado || !estado.provincia || estado.provinciaOtro
-                  }
-                  className={`${inputBase} appearance-none disabled:opacity-50`}
-                >
-                  <option value="">Elige una ciudad</option>
-                  {CANTONES_DE(estado.provincia).map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                  <option value="__otra__">Otra (escribir)…</option>
-                </select>
+                  deshabilitado={deshabilitado || !estado.provincia || estado.provinciaOtro}
+                  opciones={[...opcionesTexto(CANTONES_DE(estado.provincia)), { valor: '__otra__', texto: 'Otra (escribir)…' }]}
+                  placeholder={estado.provincia ? 'Elige una ciudad' : 'Primero la provincia'}
+                  textoBusqueda="Buscar ciudad"
+                />
               )}
             </div>
           </div>
@@ -778,19 +754,15 @@ export default function FormularioNegocio({
                 disabled={deshabilitado}
                 className="h-10 rounded-md border border-border bg-white px-2 text-[13px] text-foreground focus:border-accent/70 focus:outline-none focus:ring-[3px] focus:ring-accent/15"
               />
-              <select
-                value={estado.diaQueSeAgrega}
-                onChange={(e) => set('diaQueSeAgrega', e.target.value)}
-                disabled={deshabilitado}
-                aria-label="Día a agregar"
-                className="h-10 rounded-md border border-border bg-white px-2.5 text-[13px] text-foreground focus:border-accent/70 focus:outline-none focus:ring-[3px] focus:ring-accent/15"
-              >
-                {DIAS.map((dia) => (
-                  <option key={dia} value={dia}>
-                    {dia}
-                  </option>
-                ))}
-              </select>
+              <Selector
+                etiqueta="Día a agregar"
+                valor={estado.diaQueSeAgrega}
+                onCambiar={(v) => set('diaQueSeAgrega', v)}
+                deshabilitado={deshabilitado}
+                opciones={opcionesTexto(DIAS)}
+                buscable={false}
+                clase="h-10 min-w-32 rounded-md border border-border bg-white px-2.5 text-[13px] text-foreground transition-colors hover:border-muted focus:outline-none focus-visible:border-accent/70 focus-visible:ring-[3px] focus-visible:ring-accent/15"
+              />
               <button
                 type="button"
                 disabled={deshabilitado}

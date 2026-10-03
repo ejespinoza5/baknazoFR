@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import Cropper, { type Area, type Point } from 'react-easy-crop';
-import { normalizarImagen } from '../lib/imagen';
+import { normalizarImagen, tieneTransparencia } from '../lib/imagen';
 import BaknazoLoader from './BaknazoLoader';
 
 /** Formatos de recorte para fotos de anuncio. */
@@ -35,6 +35,8 @@ interface Props {
    * avatar es siempre cuadrado, así que no tiene sentido ofrecerle otra cosa.
    */
   formatos?: FormatoRecorte[];
+  /** Línea extra bajo el título, p. ej. el tamaño final de una portada. */
+  ayuda?: string;
 }
 
 function cargarImagen(src: string): Promise<HTMLImageElement> {
@@ -67,13 +69,18 @@ function prepararLienzo(
 }
 
 function aArchivo(blob: Blob, nombreBase: string, esPng: boolean): File {
-  const tipo = esPng ? 'image/png' : 'image/jpeg';
-  const nombre = `${nombreBase}.${esPng ? 'png' : 'jpg'}`;
+  // Manda lo que de verdad salió del lienzo (un PNG opaco ya viene como JPEG).
+  const png = blob.type ? blob.type === 'image/png' : esPng;
+  const tipo = png ? 'image/png' : 'image/jpeg';
+  const nombre = `${nombreBase}.${png ? 'png' : 'jpg'}`;
   return new File([blob], nombre, { type: blob.type || tipo });
 }
 
 function aBlob(canvas: HTMLCanvasElement, esPng: boolean): Promise<Blob> {
-  const tipo = esPng ? 'image/png' : 'image/jpeg';
+  // Un PNG sin transparencia sale como JPEG: mucho más liviano.
+  const ctx = canvas.getContext('2d');
+  const png = esPng && (!ctx || tieneTransparencia(ctx, canvas.width, canvas.height));
+  const tipo = png ? 'image/png' : 'image/jpeg';
   return new Promise((resolver, rechazar) =>
     canvas.toBlob(
       (blob) =>
@@ -156,6 +163,7 @@ export default function RecortadorImagen({
   tamanoSalida = 512,
   forma = 'circulo',
   formatos = ['4/3', '1/1'],
+  ayuda,
 }: Props) {
   const [archivo, setArchivo] = useState<File | null>(null);
   const [src, setSrc] = useState<string | null>(null);
@@ -253,6 +261,9 @@ export default function RecortadorImagen({
               ? 'Se guardará en forma de círculo.'
               : 'Lo que quede fuera del marco se descarta de la foto.'}
           </p>
+          {ayuda && (
+            <p className="mt-2 rounded-lg bg-background px-3 py-2 text-[12px] leading-snug text-medio">{ayuda}</p>
+          )}
 
           {/* El formato se elige aquí y no viene impuesto. Con 4:3 fijo, una
               captura vertical salía cortada sin que hubiera forma de evitarlo. */}

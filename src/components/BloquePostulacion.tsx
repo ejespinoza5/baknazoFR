@@ -8,6 +8,7 @@ import { notificarError, notificarExito } from '../lib/notificar';
 import { formatearBytes, prepararCv, type CvPreparado } from '../lib/pdf';
 import { ESTADO_POSTULANTE, TONO_ESTADO } from '../lib/postulaciones';
 import type { Anuncio } from '../types/anuncio';
+import PreguntaPostulacion from './PreguntaPostulacion';
 import BaknazoLoader from './BaknazoLoader';
 
 /**
@@ -37,8 +38,10 @@ export default function BloquePostulacion({
   const [enviando, setEnviando] = useState(false);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [enviada, setEnviada] = useState(false);
+  const [respuestas, setRespuestas] = useState<Record<string, string>>({});
 
   if (anuncio.pilar !== 'empleo') return null;
+  const preguntas = 'preguntas' in anuncio.detalle ? (anuncio.detalle.preguntas ?? []) : [];
 
   /* ---------- Dueño de la vacante ---------- */
   if (anuncio.esMio) {
@@ -67,6 +70,19 @@ export default function BloquePostulacion({
           </button>
         </div>
       </div>
+    );
+  }
+
+  /* ---------- Cuenta de negocio: no se postula ---------- */
+  // Los negocios publican vacantes; postularse es de personas (el backend da 403).
+  if (sesion?.usuario.tipo_cuenta === 'NEGOCIO') {
+    return (
+      <p className="mt-4 flex items-start gap-2.5 rounded-xl border border-border bg-background/60 px-4 py-3 text-[13.5px] leading-snug text-muted">
+        <span className="mt-0.5 shrink-0 text-empleo-deep">
+          <IconoMaletin />
+        </span>
+        Las cuentas de negocio no pueden postularse a vacantes. Para buscar trabajo, usa una cuenta personal.
+      </p>
     );
   }
 
@@ -125,20 +141,35 @@ export default function BloquePostulacion({
   };
 
   const enviar = async () => {
-    if (!cv) {
-      setErrores({ cv: 'Adjunta tu hoja de vida en PDF.' });
+    // Lo que falta se marca todo a la vez, no de uno en uno.
+    const faltan: Record<string, string> = {};
+    if (!cv) faltan.cv = 'Adjunta tu hoja de vida en PDF.';
+    for (const p of preguntas) {
+      if (p.obligatoria && !(respuestas[p.id] ?? '').trim()) faltan[`respuestas.${p.id}`] = 'Esta pregunta es obligatoria.';
+    }
+    if (!cv || Object.keys(faltan).length > 0) {
+      setErrores(faltan);
       return;
     }
     setEnviando(true);
     setErrores({});
     try {
-      const r = await postular(anuncio.id, { cv: cv.archivo, mensaje, telefono });
+      const contestadas = Object.fromEntries(
+        Object.entries(respuestas).filter(([id, v]) => v.trim() && preguntas.some((p) => p.id === id))
+      );
+      const r = await postular(anuncio.id, { cv: cv.archivo, mensaje, telefono, respuestas: contestadas });
       setEnviada(true);
       onPostulado?.(r);
       notificarExito('Postulación enviada. La empresa ya puede ver tu hoja de vida.');
     } catch (e) {
       const porCampo = erroresDeValidacion(e);
-      if (porCampo) setErrores(porCampo as Record<string, string>);
+      if (porCampo) {
+        setErrores(porCampo as Record<string, string>);
+        // La empresa cambió sus preguntas mientras se respondía.
+        if (Object.keys(porCampo).some((k) => k.startsWith('respuestas.') && !preguntas.some((p) => `respuestas.${p.id}` === k))) {
+          notificarError('La empresa actualizó sus preguntas. Cierra y vuelve a abrir el anuncio para verlas.');
+        }
+      }
       else notificarError(e instanceof Error ? e.message : 'No se pudo enviar la postulación.');
     } finally {
       setEnviando(false);
@@ -156,7 +187,11 @@ export default function BloquePostulacion({
           <IconoMaletin />
           {sesion ? 'Postularme a esta vacante' : 'Entra para postularte'}
         </button>
-        <p className="mt-1.5 text-center text-[12px] text-muted">Envía tu hoja de vida en PDF. Toma un minuto.</p>
+        <p className="mt-1.5 text-center text-[12px] text-muted">
+          {preguntas.length === 0
+            ? 'Postulación rápida: solo tu hoja de vida en PDF.'
+            : `Tu hoja de vida en PDF y ${preguntas.length === 1 ? 'una pregunta' : `${preguntas.length} preguntas`} de la empresa.`}
+        </p>
       </div>
     );
   }
@@ -234,6 +269,25 @@ export default function BloquePostulacion({
           </p>
         )}
       </div>
+
+      {preguntas.length > 0 && (
+        <fieldset className="space-y-4 rounded-lg border border-border bg-background/50 p-3.5 sm:p-4">
+          <legend className="px-1 text-[13px] font-semibold text-foreground">Preguntas de {anuncio.autor.nombre}</legend>
+          {preguntas.map((p, i) => (
+            <PreguntaPostulacion
+              key={p.id}
+              pregunta={p}
+              numero={i + 1}
+              valor={respuestas[p.id] ?? ''}
+              error={errores[`respuestas.${p.id}`]}
+              onCambiar={(v) => {
+                setRespuestas((r) => ({ ...r, [p.id]: v }));
+                if (errores[`respuestas.${p.id}`]) setErrores((e) => ({ ...e, [`respuestas.${p.id}`]: '' }));
+              }}
+            />
+          ))}
+        </fieldset>
+      )}
 
       <label className="block">
         <span className="mb-1.5 block text-[13px] font-medium text-muted">

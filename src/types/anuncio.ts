@@ -10,6 +10,8 @@ import type { Pilar } from '../lib/pilares';
 
 export type EstadoAnuncio =
   | 'BORRADOR'
+  /** Lo detuvo una regla de moderación: espera a un administrador. Nunca es público. */
+  | 'PENDIENTE_REVISION'
   | 'PUBLICADO'
   | 'PAUSADO'
   | 'RECHAZADO'
@@ -91,7 +93,32 @@ export type DetalleServicio = {
 export type DetalleEmpleo = {
   jornada: 'TIEMPO_COMPLETO' | 'MEDIO_TIEMPO' | 'POR_TEMPORADA';
   modalidad: 'REMOTO' | 'PRESENCIAL' | 'HIBRIDO';
+  /** Vacío = postulación rápida (solo la hoja de vida). */
+  preguntas?: PreguntaEmpleo[];
 };
+
+/** Respuesta abierta, sí o no, o una de una lista. */
+export type TipoPregunta = 'TEXTO' | 'SI_NO' | 'OPCION';
+
+/** Una pregunta del cuestionario de una vacante. */
+export interface PreguntaEmpleo {
+  id: string;
+  texto: string;
+  tipo: TipoPregunta;
+  obligatoria: boolean;
+  /** Solo en OPCION. */
+  opciones?: string[];
+}
+
+/** Lo que se respondió, con la pregunta tal como estaba al postularse. */
+export interface RespuestaPregunta {
+  id: string;
+  pregunta: string;
+  tipo: TipoPregunta;
+  obligatoria: boolean;
+  /** null: no la respondió (era opcional). SI_NO llega como 'SI' o 'NO'. */
+  respuesta: string | null;
+}
 
 export type Detalle = DetalleProducto | DetalleServicio | DetalleEmpleo;
 
@@ -156,6 +183,8 @@ export interface Anuncio {
   latitud?: number | null;
   longitud?: number | null;
   notasModeracion?: string | null;
+  /** Solo al dueño: lo pausó la moderación y no lo puede reanudar. */
+  pausaAdministrativa?: boolean;
   /** Si quien mira lo tiene en Guardados. */
   guardado?: boolean;
   /** Solo empleo y solo al dueño: cuántas postulaciones tiene. */
@@ -179,6 +208,7 @@ export interface PostulacionRecibida {
   estado: EstadoPostulacion;
   mensaje: string | null;
   telefono: string | null;
+  respuestas: RespuestaPregunta[];
   notaInterna: string | null;
   creadoEn: string;
   actualizadoEn: string;
@@ -192,6 +222,7 @@ export interface PostulacionEnviada {
   id: number;
   estado: EstadoPostulacion;
   mensaje: string | null;
+  respuestas: RespuestaPregunta[];
   creadoEn: string;
   actualizadoEn: string;
   cv: { nombre: string; bytes: number };
@@ -206,6 +237,36 @@ export interface RespuestaRecibidas {
     porEstado: Partial<Record<EstadoPostulacion, number>>;
     vacantes: { id: number; titulo: string; abierta: boolean; total: number; nuevas: number }[];
   };
+}
+
+/** Una vacante del negocio, con su anuncio y el embudo de candidatos. */
+export interface VacanteGestion {
+  id: number;
+  slug: string;
+  titulo: string;
+  estado: EstadoAnuncio;
+  /** Cubierta: el puesto ya se llenó (es el `vendido` del anuncio). */
+  vendido: boolean;
+  vendidoEn: string | null;
+  abierta: boolean;
+  precio: string | null;
+  moneda: string;
+  ubicacion: string;
+  sector: string | null;
+  categoria: string;
+  /** preguntas: cuántas tiene el cuestionario (0 = postulación rápida). */
+  detalle: { jornada: string | null; modalidad: string | null; preguntas?: number };
+  portada: string | null;
+  vistas: number;
+  publicadoEn: string | null;
+  creadoEn: string;
+  postulaciones: { total: number; porEstado: Partial<Record<EstadoPostulacion, number>> };
+  /** Los últimos cuatro que se postularon, para las caras de la lista. */
+  recientes: { nombre: string; foto: string | null }[];
+}
+
+export interface RespuestaVacantes {
+  items: VacanteGestion[];
 }
 
 export interface RespuestaEnviadas {

@@ -743,6 +743,28 @@ export function IconoBocadillo() {
   );
 }
 
+/** Auriculares con micrófono: el soporte, alguien del equipo al otro lado. */
+export function IconoSoporte() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4.5 13.5v-1a7.5 7.5 0 0 1 15 0v1" />
+      <rect x="3.5" y="13" width="4" height="6" rx="1.5" />
+      <rect x="16.5" y="13" width="4" height="6" rx="1.5" />
+      <path d="M18.5 19v.5a2 2 0 0 1-2 2H13" />
+    </svg>
+  );
+}
+
 /**
  * Nudo de compartir: los tres puntos unidos por líneas, como el botón de
  * compartir de las redes. Es el icono al que la gente ya asocia esa acción.
@@ -831,6 +853,122 @@ export function IconoEstrella({ llena = false }: { llena?: boolean }) {
       aria-hidden="true"
     >
       <path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8Z" />
+    </svg>
+  );
+}
+
+/** Tres puntos: el menú de más opciones (bloquear, ver perfil). */
+export function IconoOpciones() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+      <circle cx="5.5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="18.5" cy="12" r="1.6" />
+    </svg>
+  );
+}
+
+/** Bandera: denunciar una publicación. */
+export function IconoBandera() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5.5 21V4" />
+      <path d="M5.5 4.5c2.5-1.5 4.5-1.5 7 0s4.5 1.5 6.5 0v9c-2 1.5-4 1.5-6.5 0s-4.5-1.5-7 0" />
+    </svg>
+  );
+}
+
+/** Círculo tachado: bloquear a alguien. */
+export function IconoBloquear() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+/** Flecha hacia arriba: enviar el mensaje, como en cualquier chat. */
+export function IconoEnviar() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" />
+    </svg>
+  );
+}
+
+/**
+ * La marca de entrega de un mensaje: un visto si el servidor lo guardó, dos si
+ * ya llegó (o se leyó; eso lo dice el color, no la forma).
+ */
+export function IconoVisto({ doble = false }: { doble?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {doble ? (
+        <path d="m2.5 12.5 4 4 8.5-9M11 16.5l.5.5 8.5-9" />
+      ) : (
+        <path d="m5 12.5 4 4 10-10" />
+      )}
+    </svg>
+  );
+}
+
+/** Dos personas: las vacantes con su gente detrás. */
+export function IconoGrupo() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="9" cy="8.5" r="3" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 5.8a3 3 0 0 1 0 5.4M17.5 14.2a5.5 5.5 0 0 1 3 4.8" />
     </svg>
   );
 }

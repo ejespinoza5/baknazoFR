@@ -162,15 +162,15 @@ export function valorLegible(codigo: string): string {
 }
 
 /**
- * Cómo se lee el número de likes: "Te gusta", "Tú y 3 más" o "12 me gusta".
+ * Cómo se lee el número de likes: "Me gusta", "Tú y 3 más" o "12 me gusta".
  *
  * El caso intermedio importa más de lo que parece: si eres el único al que le
  * gusta, "Tú y 0 más" se lee como que hay alguien más y no es cierto. Facebook
- * pone "Te gusta" a secas ahí, y es lo que se hace.
+ * pone el texto a secas ahí, y es lo que se hace (en primera persona: "Me gusta").
  */
 export function resumenDeLikes(likes: number, meGusta: boolean): string {
-  if (meGusta) return likes <= 1 ? 'Te gusta' : `Tú y ${likes - 1} más`;
-  return likes === 1 ? '1 me gusta' : `${likes.toLocaleString('es-EC')} te gusta`;
+  if (meGusta) return likes <= 1 ? 'Me gusta' : `Tú y ${likes - 1} más`;
+  return likes === 1 ? '1 me gusta' : `${likes.toLocaleString('es-EC')} me gusta`;
 }
 
 /** "1 vista" / "24 vistas". Los contadores se leen de uno en uno. */

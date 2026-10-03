@@ -82,6 +82,22 @@ function dimensiones(img: ImageBitmap | HTMLImageElement) {
     : { ancho: img.width, alto: img.height };
 }
 
+/**
+ * Si el lienzo tiene algún píxel transparente. Un PNG que no lo tiene es una
+ * foto como cualquier otra y se sube como JPEG: pesa diez veces menos. Antes se
+ * conservaba en PNG y unas pocas fotos pasaban del límite del servidor, que
+ * cortaba la subida (el navegador lo mostraba como un error de CORS).
+ */
+export function tieneTransparencia(ctx: CanvasRenderingContext2D, ancho: number, alto: number): boolean {
+  try {
+    const { data } = ctx.getImageData(0, 0, ancho, alto);
+    for (let i = 3; i < data.length; i += 4) if (data[i] < 255) return true;
+    return false;
+  } catch {
+    return true; // sin poder leerlo, se respeta el formato original
+  }
+}
+
 function cerrar(img: ImageBitmap | HTMLImageElement) {
   if ('close' in img) img.close();
 }
@@ -127,12 +143,16 @@ export async function normalizarImagen(archivo: File): Promise<File> {
 
     ctx.drawImage(img, 0, 0, destinoAncho, destinoAlto);
 
-    // Se conserva el formato original cuando el navegador sabe escribirlo. No
-    // todos aceptan AVIF en un canvas, y ahí se cae a JPEG sin perder nada.
+    // WEBP y JPEG se conservan. PNG solo si de verdad usa transparencia (un
+    // logo); si no, va como JPEG. AVIF no lo escriben todos los navegadores en
+    // un canvas, así que también pasa a JPEG.
     const candidato = archivo.type;
-    const tipo = candidato === 'image/png' || candidato === 'image/webp' || candidato === 'image/jpeg'
-      ? candidato
-      : 'image/jpeg';
+    const tipo =
+      candidato === 'image/webp' || candidato === 'image/jpeg'
+        ? candidato
+        : candidato === 'image/png' && tieneTransparencia(ctx, destinoAncho, destinoAlto)
+          ? 'image/png'
+          : 'image/jpeg';
 
     const blob = await new Promise<Blob | null>((resolver) =>
       lienzo.toBlob(resolver, tipo, tipo === 'image/png' ? undefined : CALIDAD)

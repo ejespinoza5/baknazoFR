@@ -6,6 +6,7 @@ import { OCULTO_CON_RATON } from '../../lib/tactil';
 import { normalizarImagen } from '../../lib/imagen';
 import { fotoEntera } from '../config/ui';
 import { FORMATOS_FOTO } from './datos';
+import FormatosAceptados from '../../components/FormatosAceptados';
 
 interface Props {
   fotos: (File | null)[];
@@ -202,6 +203,7 @@ export default function HuecosFoto({ fotos, onCambio, maxFotos, maxBytes }: Prop
         Las fotos se publican enteras. Si quieres recortarlas, toca el botón de
         ajustar de cada una.
       </p>
+      <FormatosAceptados maxBytes={maxBytes} />
 
       {recortando && (
         <RecortadorImagen

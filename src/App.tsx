@@ -31,14 +31,31 @@ import ExplorarScreen from './screens/explorar/ExplorarScreen';
 import NoEncontradoScreen from './screens/NoEncontradoScreen';
 import GuardadosScreen from './screens/guardados/GuardadosScreen';
 import PostulacionesScreen from './screens/postulaciones/PostulacionesScreen';
+import VacantesScreen from './screens/vacantes/VacantesScreen';
+import MensajesScreen from './screens/mensajes/MensajesScreen';
+import { alEventoChat, conversacionAbiertaActual, detenerChat, iniciarChat } from './lib/chatEnVivo';
+import { notificarMensaje } from './lib/notificar';
+import NotificacionesScreen from './screens/notificaciones/NotificacionesScreen';
+import AdminApp from './admin/AdminApp';
+import LandingScreen from './screens/landing/LandingScreen';
+import {
+  detenerNotificaciones,
+  iniciarNotificaciones,
+  sonidoActual,
+  useNoLeidasNotificaciones,
+} from './lib/notificaciones';
+import { mostrarAvisoDelSistema, olvidarDispositivo, refrescarPush } from './lib/push';
+import { reproducirSonido } from './lib/sonidos';
+import { detenerSoporte, iniciarSoporte, soporteVisible } from './lib/soporte';
+import type { CategoriaNotificacion } from './types/notificacion';
 import VerificarCorreoScreen from './screens/auth/VerificarCorreoScreen';
 import RecuperarContrasenaScreen from './screens/auth/RecuperarContrasenaScreen';
 import Alertas from './components/Alertas';
 import BaknazoLoader from './components/BaknazoLoader';
 import { limpiarBorrador } from './lib/borrador';
 import { NavegacionContexto, type Navegacion } from './lib/navegacion';
+import { recordarDestino, tomarDestino } from './lib/volverTrasEntrar';
 import { notificarInfo } from './lib/notificar';
-import { olvidarPropios } from './lib/propios';
 import { olvidarPerfilesEnCache } from './lib/cachePerfil';
 import type {
   DatosRegistroManual,
@@ -58,7 +75,9 @@ import type { SemillaPerfil } from './types/perfil';
  * puede compartir, y el botón de atrás funciona sin código extra.
  */
 const RUTAS = {
-  login: '/',
+  /** La landing pública. El login vive en /entrar (y /entrar?modo=registro). */
+  inicio: '/',
+  login: '/entrar',
   registro: '/tipo-cuenta',
   verificarCorreo: '/verificar-correo',
   recuperarClave: '/recuperar-clave',
@@ -74,8 +93,15 @@ const RUTAS = {
   explorar: '/explorar',
   /** Bandeja de postulaciones (recibidas y enviadas). */
   postulaciones: '/postulaciones',
+  /** Solo negocios: sus vacantes, cada una con su anuncio y sus candidatos. */
+  vacantes: '/vacantes',
   /** Los anuncios que la persona se guardó para después. */
   guardados: '/guardados',
+  /** El chat: la bandeja, y una conversación abierta en /mensajes/:id. */
+  mensajes: '/mensajes',
+  conversacion: '/mensajes/:id',
+  /** Historial de la campana y ajustes (?vista=ajustes). */
+  notificaciones: '/notificaciones',
 } as const;
 
 /** Por qué no se pudo cargar el perfil, para no culpar siempre a la red. */
@@ -191,11 +217,130 @@ function FeedEnRuta(props: {
 }
 
 
+/** La bandeja con la conversación de la URL (el `:id` se lee dentro del Route). */
+function MensajesRuta() {
+  const { id } = useParams();
+  const num = id === undefined ? null : Number(id);
+  if (num !== null && !Number.isInteger(num)) return <Navigate to={RUTAS.mensajes} replace />;
+  return <MensajesScreen conversacionId={num} />;
+}
+
+/**
+ * Los avisos del chat que valen en toda la app: un aviso al llegar un mensaje
+ * (salvo si ya se está mirando esa conversación), una notificación del
+ * navegador si la pestaña está en segundo plano y el contador en el título.
+ */
+/** El título de cada aviso dentro de la app, según de qué trata. */
+const TITULO_AVISO: Record<CategoriaNotificacion, string> = {
+  seguidores: 'Nuevo seguidor',
+  interacciones: 'Tus publicaciones',
+  mensajes: 'Mensajes',
+  publicaciones: 'Tus publicaciones',
+  empleo: 'Empleo',
+  seguridad: 'Seguridad',
+};
+
+/**
+ * Los avisos que valen en toda la app, del chat y de las notificaciones:
+ *
+ * - **Con la app a la vista**: un aviso en pantalla que lleva al contenido, y
+ *   el sonido elegido. Los mensajes del chat que se están leyendo no avisan.
+ * - **Con la pestaña en segundo plano**: un aviso del sistema, con texto
+ *   genérico (nada de nombres ni mensajes en la pantalla de bloqueo). Con la
+ *   app cerrada del todo, el servidor manda push en su lugar.
+ * - **El contador en la pestaña**: "(3) Baknazo".
+ */
+function AvisosApp() {
+  const navegar = useNavigate();
+  const noLeidas = useNoLeidasNotificaciones();
+
+  useEffect(
+    () =>
+      alEventoChat((e) => {
+        const oculta = document.visibilityState !== 'visible';
+
+        if (e.t === 'mensaje' && e.remitente) {
+          const { conversacionId, contenido } = e.mensaje;
+          if (!oculta && conversacionAbiertaActual() === conversacionId) return;
+          const abrir = () => navegar(`/mensajes/${conversacionId}`);
+          if (oculta) {
+            void mostrarAvisoDelSistema({
+              titulo: 'Baknazo',
+              texto: 'Tienes mensajes nuevos',
+              ruta: `/mensajes/${conversacionId}`,
+              // Una por conversación: la nueva reemplaza a la anterior.
+              etiqueta: `mensajes:${conversacionId}`,
+              silencio: sonidoActual() === 'ninguno',
+              alAbrir: abrir,
+            });
+            return;
+          }
+          const texto = contenido.length > 140 ? `${contenido.slice(0, 140)}…` : contenido;
+          notificarMensaje(e.remitente.nombre, texto, abrir);
+          return;
+        }
+
+        if (e.t === 'notificacion') {
+          const n = e.notificacion;
+          // El mensaje ya avisó arriba (o se está leyendo): solo suena si no se mira.
+          // El soporte se "mira" en el panel flotante o en su sección de Configuración.
+          const mirandoEsto = !oculta && (window.location.pathname === n.url || (n.tipo === 'SOPORTE' && soporteVisible()));
+          if (!mirandoEsto && !oculta) reproducirSonido(e.sonido);
+          if (n.tipo === 'MENSAJE' || mirandoEsto) return;
+          const abrir = () => navegar(n.url);
+          if (oculta) {
+            void mostrarAvisoDelSistema({
+              titulo: 'Baknazo',
+              texto: 'Tienes una notificación nueva',
+              ruta: n.url,
+              etiqueta: `notificacion-${n.id}`,
+              silencio: e.sonido === 'ninguno',
+              alAbrir: abrir,
+            });
+            return;
+          }
+          notificarMensaje(n.tipo === 'SOPORTE' ? 'Soporte Baknazo' : (TITULO_AVISO[n.categoria] ?? 'Baknazo'), n.texto, abrir);
+        }
+      }),
+    [navegar]
+  );
+
+  /* Al pulsar un push o un aviso del sistema, el service worker pide navegar. */
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const alMensaje = (e: MessageEvent) => {
+      const datos = e.data as { tipo?: string; ruta?: unknown } | null;
+      if (datos?.tipo !== 'bkn-abrir' || typeof datos.ruta !== 'string') return;
+      if (datos.ruta.startsWith('/') && !datos.ruta.startsWith('//')) navegar(datos.ruta);
+    };
+    navigator.serviceWorker.addEventListener('message', alMensaje);
+    return () => navigator.serviceWorker.removeEventListener('message', alMensaje);
+  }, [navegar]);
+
+  /* "(3) Baknazo": el contador se ve en la pestaña aunque esté en segundo plano. */
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\+?\)\s*/, '');
+    document.title = noLeidas > 0 ? `(${noLeidas > 99 ? '99+' : noLeidas}) ${base}` : base;
+  }, [noLeidas]);
+
+  return null;
+}
+
 export default function App() {
+  const { pathname } = useLocation();
+  // El panel de administración va aparte: su propia sesión y su propio marco,
+  // sin el chat, las notificaciones ni la sesión del marketplace.
+  const esPanel = pathname === '/admin' || pathname.startsWith('/admin/');
   return (
     <>
       <Alertas />
-      <Pantallas />
+      {esPanel ? (
+        <Routes>
+          <Route path="/admin/*" element={<AdminApp />} />
+        </Routes>
+      ) : (
+        <Pantallas />
+      )}
     </>
   );
 }
@@ -313,6 +458,23 @@ function Pantallas() {
 
   useRenovacionSesion(sesion);
 
+  /* El chat en vivo se conecta con la sesión y se corta al cerrarla. */
+  const idEnSesion = sesion?.usuario.id ?? null;
+  useEffect(() => {
+    if (!idEnSesion) return;
+    iniciarChat();
+    // Las notificaciones viajan por el mismo socket. El push solo se renueva
+    // si ya estaba activado en este navegador: nunca se piden permisos aquí.
+    iniciarNotificaciones();
+    iniciarSoporte();
+    void refrescarPush();
+    return () => {
+      detenerSoporte();
+      detenerNotificaciones();
+      detenerChat();
+    };
+  }, [idEnSesion]);
+
   const usuarioId = sesion?.usuario.id ?? null;
   const perfil = perfilDe?.usuarioId === usuarioId ? perfilDe.usuario : null;
   const falloPerfil = falloDe?.usuarioId === usuarioId ? falloDe.motivo : null;
@@ -401,9 +563,14 @@ function Pantallas() {
     setPerfilDe(null);
     setFalloDe(null);
     // Si se llegó al login desde un enlace (un perfil, un anuncio), se vuelve a
-    // él y no al feed: el enlace compartido era lo que se quería ver.
-    const desde = (location.state as { desde?: string } | null)?.desde;
-    navegar(desde && desde !== RUTAS.login ? desde : RUTAS.feed);
+    // él y no al feed: el enlace compartido era lo que se quería ver. El destino
+    // guardado cubre el registro, que pierde el `state` al pasar por el tipo de
+    // cuenta y la verificación del correo. Se toma siempre, para no dejarlo
+    // colgado para un login posterior.
+    const guardado = tomarDestino();
+    const desde = (location.state as { desde?: string } | null)?.desde ?? guardado;
+    const util = desde && desde !== RUTAS.login && desde !== RUTAS.inicio;
+    navegar(util ? desde : RUTAS.feed);
   };
 
   /** Refleja en la sesión (y en el almacenamiento) lo que devolvió el PATCH. */
@@ -468,11 +635,32 @@ function Pantallas() {
 
   const abrirRecuperacion = () => navegar(RUTAS.recuperarClave);
 
-  const cerrarSesion = () => {
+  /**
+   * Los menús no cierran la sesión directo: preguntan primero. "Cerrar sesión"
+   * está junto a entradas de uso diario y un toque errado sacaría a alguien de
+   * su cuenta sin querer.
+   */
+  const [confirmarSalida, setConfirmarSalida] = useState(false);
+
+  useEffect(() => {
+    if (!confirmarSalida) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConfirmarSalida(false);
+    };
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, [confirmarSalida]);
+
+  const [saliendo, setSaliendo] = useState(false);
+  const cerrarSesion = async () => {
+    setSaliendo(true);
+    // Primero, con la sesión todavía válida, este navegador deja de recibir
+    // push de la cuenta que sale. Como mucho se espera un par de segundos: sin
+    // red, cerrar sesión no puede quedarse colgado.
+    await Promise.race([olvidarDispositivo(), new Promise((r) => setTimeout(r, 2500))]);
+    setSaliendo(false);
+    setConfirmarSalida(false);
     limpiarBorrador();
-    // Los ids anotados eran de la cuenta que sale: si no se olvidan, la siguiente
-    // persona en usar el dispositivo vería sus anuncios sin botón de chat.
-    olvidarPropios();
     olvidarPerfilesEnCache();
     // El motor borra el almacenamiento y avisa: esto cierra la sesión en la UI.
     salir();
@@ -512,13 +700,19 @@ function Pantallas() {
     irAConfiguracion: () => navegar(RUTAS.configuracion),
     irAExplorar: () => navegar(RUTAS.explorar),
     irAPostulaciones: () => navegar(RUTAS.postulaciones),
+    irAVacantes: () => navegar(RUTAS.vacantes),
+    irAMensajes: () => navegar(RUTAS.mensajes),
     irAGuardados: () => navegar(RUTAS.guardados),
     irAMiPerfil: () => {
       if (usuarioId) navegar(`/perfil/${usuarioId}`);
       else navegar(RUTAS.login);
     },
-    irAlLogin: () => navegar(RUTAS.login, { state: { desde: location.pathname } }),
-    cerrarSesion,
+    irAlLogin: (destino?: string) => {
+      const desde = destino ?? location.pathname;
+      recordarDestino(desde);
+      navegar(RUTAS.login, { state: { desde } });
+    },
+    cerrarSesion: () => setConfirmarSalida(true),
   };
 
   /**
@@ -537,6 +731,7 @@ function Pantallas() {
 
   return (
     <NavegacionContexto.Provider value={navegacion}>
+    {sesion && <AvisosApp />}
     <Routes>
       {/* Un anuncio suelto: /anuncio/123. Es la ruta compartible, y pinta el
           feed detrás para que cerrar la ficha devuelva al listado. */}
@@ -586,7 +781,24 @@ function Pantallas() {
 
       <Route path={RUTAS.guardados} element={exigeSesion(<GuardadosScreen />)} />
 
+      <Route path={RUTAS.mensajes} element={exigeSesion(<MensajesRuta />)} />
+      <Route path={RUTAS.conversacion} element={exigeSesion(<MensajesRuta />)} />
+
+      <Route path={RUTAS.notificaciones} element={exigeSesion(<NotificacionesScreen />)} />
+
       <Route path={RUTAS.postulaciones} element={exigeSesion(<PostulacionesScreen />)} />
+
+      {/* Una persona no publica vacantes: a sus postulaciones, que es lo suyo. */}
+      <Route
+        path={RUTAS.vacantes}
+        element={exigeSesion(
+          sesion?.usuario.tipo_cuenta === 'NEGOCIO' ? (
+            <VacantesScreen onEditar={(id) => navegar(`/mis-anuncios/${id}/editar`)} />
+          ) : (
+            <Navigate to={`${RUTAS.postulaciones}?vista=enviadas`} replace />
+          )
+        )}
+      />
 
       <Route
         path={RUTAS.configuracion}
@@ -642,9 +854,52 @@ function Pantallas() {
       />
       <Route path="/login" element={<Navigate to={RUTAS.login} replace />} />
 
+      {/* La landing: la carta de presentación para quien llega sin cuenta. Con
+          sesión, la portada de la app es el feed. */}
+      <Route path={RUTAS.inicio} element={sesion ? <Navigate to={RUTAS.feed} replace /> : <LandingScreen />} />
+
       {/* Cualquier otra dirección: 404 de verdad, no el login. */}
       <Route path="*" element={<NoEncontradoScreen />} />
     </Routes>
+
+    {confirmarSalida && sesion && (
+      <div
+        className="fixed inset-0 z-[60] grid place-items-center bg-carbon/40 px-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-salir"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setConfirmarSalida(false);
+        }}
+      >
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-white p-6 shadow-[0_18px_40px_-20px_rgba(31,41,55,0.45)]">
+          <h2 id="titulo-salir" className="text-[17px] font-semibold tracking-tight text-foreground">
+            ¿Cerrar sesión?
+          </h2>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
+            Tendrás que volver a entrar con tu correo o con Google para publicar, postularte o ver tus anuncios.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setConfirmarSalida(false)}
+              className="h-10 rounded-lg border border-border bg-white px-4 text-[14px] font-medium text-foreground transition-colors hover:border-muted"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => void cerrarSesion()}
+              disabled={saliendo}
+              className="h-10 rounded-lg bg-danger px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {saliendo ? 'Cerrando sesión…' : 'Sí, cerrar sesión'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </NavegacionContexto.Provider>
   );
 }

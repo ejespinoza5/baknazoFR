@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { AnimatePresence, m, type Variants } from 'motion/react';
 import {
   esErrorVerificacionPendiente,
   loginManual,
@@ -8,6 +9,7 @@ import {
 } from '../../api/auth';
 import { claveEsValida, correoEsValido, evaluarClave } from '../../lib/password';
 import BotonGoogle from '../../components/BotonGoogle';
+import AlturaAnimada from '../../components/AlturaAnimada';
 import {
   IconoAlerta,
   IconoCheck,
@@ -18,7 +20,8 @@ import {
 import BaknazoLoader from '../../components/BaknazoLoader';
 import Emblema from '../../components/Emblema';
 import EsloganTyper from '../../components/EsloganTyper';
-import { notificarError, notificarInfo } from '../../lib/notificar';
+import { cerrarAlertas, notificarError, notificarInfo } from '../../lib/notificar';
+import { ENTRADA_SALIDA, HIJO, RESORTE, SALIDA } from '../../lib/movimiento';
 import {
   CacaoEcuador,
   CondorAndino,
@@ -68,14 +71,47 @@ const ESLOGANES = [
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 
+/* En PC con poco alto (`bajo:`) todo se compacta un poco para caber sin scroll. */
 const inputBase =
-  'h-11 w-full rounded-lg border border-border bg-white px-3.5 text-[15px] text-foreground placeholder:text-muted transition-colors duration-150 focus:border-accent/70 focus:outline-none focus:ring-[3px] focus:ring-accent/15 disabled:cursor-not-allowed disabled:opacity-50';
+  'h-11 w-full rounded-lg border border-border bg-white px-3.5 text-[15px] text-foreground placeholder:text-muted transition-colors duration-150 focus:border-accent/70 focus:outline-none focus:ring-[3px] focus:ring-accent/15 disabled:cursor-not-allowed disabled:opacity-50 bajo:h-10';
 
 const botonPrimario =
-  'inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand text-[15px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-brand-dark active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand text-[15px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-brand-dark active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 bajo:h-11';
+
+const etiqueta = 'mb-1.5 block text-[13px] font-medium text-muted bajo:mb-1';
 
 const alertaError =
-  'mb-5 flex items-start gap-2.5 rounded-lg border border-danger/25 bg-danger/[0.04] px-3.5 py-2.5 text-[13px] leading-snug text-danger-deep';
+  'mb-4 flex items-start gap-2.5 rounded-lg border border-danger/25 bg-danger/[0.04] px-3.5 py-2.5 text-[13px] leading-snug text-danger-deep';
+
+/**
+ * Cambio entre "Iniciar sesión" y "Crear cuenta": el formulario que se va sale
+ * hacia un lado y el nuevo entra desde el otro, según hacia dónde se movió la
+ * pastilla. Sus campos llegan en cascada.
+ */
+const PANEL: Variants = {
+  oculto: (d: number) => ({ opacity: 0, x: d * 32, filter: 'blur(3px)' }),
+  visible: {
+    opacity: 1,
+    x: 0,
+    filter: 'blur(0px)',
+    transition: { duration: 0.42, ease: SALIDA, staggerChildren: 0.035, delayChildren: 0.05 },
+  },
+  salida: (d: number) => ({
+    opacity: 0,
+    x: d * -32,
+    filter: 'blur(3px)',
+    transition: { duration: 0.2, ease: ENTRADA_SALIDA },
+  }),
+};
+
+/** Un bloque del formulario que llega en la cascada. */
+function Paso({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <m.div variants={HIJO} className={className}>
+      {children}
+    </m.div>
+  );
+}
 
 export default function AuthScreen({
   onSesion,
@@ -84,7 +120,17 @@ export default function AuthScreen({
   onVerificacionNecesaria,
   onRecuperarClave,
 }: Props) {
-  const [modo, setModo] = useState<Modo>('login');
+  // La landing manda a /entrar?modo=registro desde "Crear cuenta" y "Publicar gratis".
+  const [modo, setModo] = useState<Modo>(() =>
+    new URLSearchParams(window.location.search).get('modo') === 'registro' ? 'registro' : 'login'
+  );
+  /** Hacia dónde se movió la pastilla: 1 a la derecha (crear), -1 a la izquierda. */
+  const [direccion, setDireccion] = useState(1);
+  const cambiarModo = (nuevo: Modo) => {
+    if (nuevo === modo) return;
+    setDireccion(nuevo === 'registro' ? 1 : -1);
+    setModo(nuevo);
+  };
 
   // ---------- Estado: inicio de sesión ----------
   const [correo, setCorreo] = useState('');
@@ -128,6 +174,7 @@ export default function AuthScreen({
     setCargando('manual');
     try {
       const sesion = await loginManual(correo.trim(), contrasena, recordarme);
+      cerrarAlertas();
       onSesion(sesion, recordarme);
     } catch (e) {
       if (esErrorVerificacionPendiente(e)) {
@@ -265,15 +312,16 @@ export default function AuthScreen({
   };
 
   const ocupado = cargando !== null;
+  // Mientras se envía con correo, el botón muestra su propio cargador; los
+  // demás casos (Google, verificación, vinculación) ocupan la tarjeta entera.
+  const tarjetaOcupada = cargando === 'google' || cargando === 'verificacion';
   const mensajeCarga =
-    cargando === 'google'
-      ? 'Conectando con Google…'
-      : cargando === 'verificacion'
-        ? 'Verificando correo…'
-        : 'Iniciando sesión…';
+    cargando === 'google' ? 'Conectando con Google…' : 'Verificando correo…';
 
-  const beneficio =
-    modo === 'login'
+  const titulo = vinculacion ? 'Vincula tu cuenta' : modo === 'login' ? 'Accede a tu cuenta' : 'Crea tu cuenta';
+  const beneficio = vinculacion
+    ? 'Confirma que eres tú para entrar también con Google.'
+    : modo === 'login'
       ? 'Usa tu cuenta de Google o el correo con el que te registraste.'
       : 'En el siguiente paso eliges si tu cuenta es de persona o de negocio.';
 
@@ -282,491 +330,498 @@ export default function AuthScreen({
   const sellos = [
     { icon: <IconoCheck ok />, texto: 'Vendedores verificados' },
     { icon: <IconoEtiqueta />, texto: 'Entregas coordinadas' },
+    { icon: <IconoEscudo />, texto: 'Tus datos protegidos' },
   ];
 
+  const separador = (
+    <Paso className="my-4 flex items-center gap-3 text-[12px] text-muted bajo:my-2.5">
+      <span className="h-px flex-1 bg-border" />
+      o continúa con tu correo
+      <span className="h-px flex-1 bg-border" />
+    </Paso>
+  );
+
   return (
-    <div className="min-h-svh lg:grid lg:grid-cols-[1.05fr_0.95fr]">
-      {/* Escenario de marca */}
-      <section className="relative hidden overflow-hidden border-r border-border bg-background px-12 pt-10 pb-10 lg:flex lg:flex-col lg:justify-between xl:px-16 2xl:px-20">
-        {/* Galería de motivos ecuatorianos en aguafuerte, tintados con los
-            tres colores de la marca y se desvanecen como marcas de agua. */}
-        <SolChimborazo className="pointer-events-none absolute -top-14 -right-16 h-[500px] w-[500px] rotate-[8deg] text-brand/25" />
-        <CondorAndino className="pointer-events-none absolute top-[33%] -left-14 h-[430px] w-[430px] -rotate-[8deg] text-accent/15" />
-        <RosaEcuador className="pointer-events-none absolute top-[28%] right-10 h-[150px] w-[150px] rotate-12 text-danger/25" />
-        <SombreroToquilla className="pointer-events-none absolute top-[86px] left-9 h-[125px] w-[125px] text-brand/20" />
-        <TortugaGalapagos className="pointer-events-none absolute right-[24%] bottom-[15%] h-[120px] w-[120px] text-accent/20" />
-        <CacaoEcuador className="pointer-events-none absolute bottom-[10%] left-[38%] h-[95px] w-[95px] text-danger/20" />
+    <div className="min-h-svh bg-background lg:grid lg:h-svh lg:grid-cols-[1.02fr_0.98fr] lg:overflow-hidden">
+      {/* ---------- Escenario de marca: el mismo amarillo de la landing ---------- */}
+      <section className="relative isolate hidden overflow-hidden bg-brand px-12 py-10 text-foreground lg:flex lg:flex-col lg:justify-between xl:px-16 bajo:py-7">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 -z-10 opacity-[0.22]"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(140,90,0,0.55) 1px, transparent 1.4px)',
+            backgroundSize: '18px 18px',
+          }}
+        />
+        {/* Motivos ecuatorianos en aguafuerte, como marcas de agua. */}
+        <SolChimborazo className="pointer-events-none absolute -top-16 -right-20 -z-10 h-[460px] w-[460px] rotate-[8deg] text-white/45" />
+        <CondorAndino className="pointer-events-none absolute top-[36%] -left-20 -z-10 h-[400px] w-[400px] -rotate-[8deg] text-foreground/[0.07]" />
+        <RosaEcuador className="pointer-events-none absolute top-[24%] right-12 -z-10 h-[130px] w-[130px] rotate-12 text-empleo/25" />
+        <SombreroToquilla className="pointer-events-none absolute top-[92px] left-[44%] -z-10 h-[110px] w-[110px] text-foreground/[0.08]" />
+        <TortugaGalapagos className="pointer-events-none absolute right-[18%] bottom-[18%] -z-10 h-[110px] w-[110px] text-accent/25" />
+        <CacaoEcuador className="pointer-events-none absolute bottom-[8%] left-[44%] -z-10 h-[85px] w-[85px] text-foreground/[0.08]" />
 
-        <div className="relative flex items-center gap-2.5">
-          <Emblema tamano={42} />
-          <span className="text-[16px] font-semibold tracking-tight text-foreground">
-            Baknazo
+        <m.a
+          href="/"
+          aria-label="Baknazo, ir al inicio"
+          className="flex w-fit items-center gap-2.5"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: SALIDA }}
+        >
+          <span className="rounded-full bg-white/70 p-0.5">
+            <Emblema tamano={40} />
           </span>
-        </div>
+          <span className="titular text-[24px]">Baknazo</span>
+        </m.a>
 
-        <div className="relative">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
-            Tú Marketplace de confianza
+        <m.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease: SALIDA, delay: 0.1 }}
+        >
+          <p className="text-[12px] font-semibold tracking-[0.16em] text-foreground/70 uppercase">
+            Tu marketplace de confianza
           </p>
           <EsloganTyper
             esloganes={ESLOGANES}
-            className="mt-5 min-h-[2.5em] text-[min(5vw,4.75rem)] font-semibold leading-[1.08] tracking-[-0.03em] text-foreground"
+            colorCursor="bg-foreground"
+            className="titular mt-5 min-h-[2em] max-w-[13ch] text-[clamp(48px,min(5.6vw,10.5vh),96px)]"
           />
-        </div>
+        </m.div>
 
-        <div className="relative border-y border-border">
-          <ul className="divide-y divide-border">
-            {sellos.map(({ icon, texto }, indice) => (
-              <li
-                key={texto}
-                className="flex items-center gap-3.5 py-3.5"
-              >
-                <span className="font-mono text-[11px] leading-none text-muted">
-                  {String(indice + 1).padStart(2, '0')}
-                </span>
-                <span
-                  className={`grid size-6 shrink-0 place-items-center ${
-                    indice === 0 ? 'text-selva' : 'text-accent'
-                  }`}
-                >
-                  {icon}
-                </span>
-                <span className="text-[13.5px] font-medium text-foreground">
-                  {texto}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <m.ul
+          className="grid gap-x-6 gap-y-2 border-t-2 border-foreground pt-5 sm:grid-cols-3"
+          initial="oculto"
+          animate="visible"
+          variants={{ visible: { transition: { staggerChildren: 0.08, delayChildren: 0.35 } } }}
+        >
+          {sellos.map(({ icon, texto }) => (
+            <m.li key={texto} variants={HIJO} className="flex items-center gap-2.5 text-[14px] font-semibold">
+              <span className="text-foreground [&>svg]:size-5">{icon}</span>
+              {texto}
+            </m.li>
+          ))}
+        </m.ul>
       </section>
 
-      {/* Formulario */}
-      <main className="flex flex-col px-4 pt-12 pb-16 sm:px-8 lg:justify-center lg:px-10 lg:py-3 xl:px-12 2xl:px-16">
-        <div className="mx-auto w-full max-w-[560px]">
+      {/* ---------- Formulario ---------- */}
+      <main className="flex min-h-svh flex-col px-4 pt-10 pb-10 sm:px-8 lg:min-h-0 lg:overflow-y-auto lg:px-12 lg:py-8 xl:px-16 bajo:py-3">
+        {/* my-auto centra sin cortar: si algún día no cabe, empieza arriba y se
+            desplaza, en vez de esconder el título como hace justify-center. */}
+        <div className="mx-auto w-full max-w-[480px] lg:my-auto">
           <div className="flex items-center justify-between gap-4 lg:hidden">
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
-                Tú Marketplace de confianza
-              </p>
+              <p className="text-[11px] font-medium tracking-[0.18em] text-muted uppercase">Tu marketplace de confianza</p>
               <EsloganTyper
                 esloganes={ESLOGANES}
-                className="mt-3 min-h-[3.3em] text-[clamp(22px,7.5vw,30px)] font-semibold leading-[1.08] tracking-[-0.03em] text-foreground"
+                className="titular mt-3 min-h-[2em] text-[clamp(28px,8.5vw,40px)] text-foreground"
               />
             </div>
-            <Emblema tamano={56} />
+            {/* El logo lleva al inicio, como en cualquier sitio. */}
+            <a href="/" aria-label="Baknazo, ir al inicio" className="shrink-0 rounded-full transition-transform active:scale-95">
+              <Emblema tamano={56} />
+            </a>
           </div>
 
-          <h1 className="mt-8 text-[24px] leading-tight font-semibold tracking-tight text-foreground sm:text-[26px] lg:mt-0">
-            {modo === 'login' ? 'Accede a tu cuenta' : 'Crea tu cuenta'}
-          </h1>
-          <p className="mt-2.5 max-w-[38ch] text-[14px] leading-relaxed text-muted">
-            {beneficio}
-          </p>
-
-          <div className="mt-8 rounded-2xl border border-border bg-white p-5 shadow-[0_1px_2px_rgba(31,41,55,0.04),0_24px_48px_-32px_rgba(31,41,55,0.35)] sm:p-7">
-            {vinculacion ? (
-              <div
-                key={`vincular-${vinculacion.correo}`}
-                id="auth-vincular"
-                role="tabpanel"
-                className="animate-bkn-in mt-4 lg:mt-5 lg:flex lg:h-[480px] lg:flex-col"
+          {/* El título cambia con el formulario, con un fundido corto. */}
+          <div className="relative mt-8 lg:mt-0">
+            {/* popLayout: el título nuevo entra mientras el viejo sale, sin que
+                la tarjeta de abajo dé un salto. */}
+            <AnimatePresence mode="popLayout" initial={false}>
+              <m.div
+                key={titulo}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.22, ease: SALIDA }}
               >
-                <div className="lg:my-auto">
-                  <span className="inline-block rounded-md bg-background px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
-                    Vinculación con Google
-                  </span>
-                  <h2 className="mt-4 max-w-[30ch] text-[19px] leading-tight font-semibold tracking-tight text-foreground">
-                    Confirma tu identidad para vincular la cuenta
-                  </h2>
-                  <p className="mt-2 text-[14px] leading-relaxed text-muted">
-                    {vinculacion.mensaje} Te enviamos un código de verificación
-                    a{' '}
-                    <strong className="font-medium text-foreground">
-                      {vinculacion.correo || 'tu correo'}
-                    </strong>
-                    .
-                  </p>
+                <h1 className="text-[26px] leading-tight font-semibold tracking-tight text-foreground bajo:text-[23px]">{titulo}</h1>
+                <p className="mt-2 max-w-[42ch] text-[14px] leading-relaxed text-muted bajo:mt-1 muybajo:hidden">{beneficio}</p>
+              </m.div>
+            </AnimatePresence>
+          </div>
 
-                  {errorVinculacion && (
-                    <div className={alertaError} role="alert">
-                      <IconoAlerta />
-                      <span>{errorVinculacion}</span>
-                    </div>
-                  )}
-
-                  <form
-                    onSubmit={manejarVinculacionSubmit}
-                    noValidate
-                    className="mt-6 space-y-4"
-                  >
-                    <label className="block">
-                      <span className="mb-1.5 block text-[13px] font-medium text-muted">
-                        Código de verificación
-                      </span>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        maxLength={6}
-                        placeholder="000000"
-                        value={codigo}
-                        onChange={(e) =>
-                          setCodigo(
-                            e.target.value.replace(/\D/g, '').slice(0, 6)
-                          )
-                        }
-                        disabled={cargando === 'vinculacion'}
-                        className={`${inputBase} text-center text-[18px] font-semibold tracking-[0.4em]`}
-                      />
-                    </label>
+          <m.div
+            className="mt-6 rounded-2xl border border-border bg-white p-5 shadow-[0_1px_2px_rgba(31,41,55,0.04),0_24px_48px_-32px_rgba(31,41,55,0.35)] sm:p-6 bajo:mt-3 bajo:p-4"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease: SALIDA, delay: 0.05 }}
+          >
+            {!vinculacion && (
+              <div role="tablist" aria-label="Modo de acceso" className="relative grid grid-cols-2 rounded-xl bg-background p-1">
+                {(['login', 'registro'] as Modo[]).map((opcion) => {
+                  const activo = modo === opcion;
+                  return (
                     <button
-                      type="submit"
-                      disabled={cargando === 'vinculacion'}
-                      className={botonPrimario}
-                    >
-                      {cargando === 'vinculacion'
-                        ? <BaknazoLoader tamano="boton" mensaje="Verificando" />
-                        : 'Verificar y continuar'}
-                    </button>
-                  </form>
-
-                  <p className="mt-4 text-[12px] leading-relaxed text-muted">
-                    El código dura unos minutos y sirve una sola vez. Si no
-                    llega o ya no es válido, vuelve a entrar con Google para
-                    recibir uno nuevo.
-                  </p>
-
-                  <p className="mt-5 text-center">
-                    <button
+                      key={opcion}
                       type="button"
-                      onClick={() => {
-                        setVinculacion(null);
-                        setErrorVinculacion(null);
-                        setCodigo('');
-                      }}
-                      disabled={cargando === 'vinculacion'}
-                      className="text-[13px] font-medium text-accent hover:underline disabled:opacity-50"
+                      role="tab"
+                      id={opcion === 'login' ? 'tab-entrar' : 'tab-crear'}
+                      aria-selected={activo}
+                      aria-controls="auth-formulario"
+                      onClick={() => cambiarModo(opcion)}
+                      disabled={ocupado}
+                      className={`relative rounded-lg py-3 text-center text-[14px] transition-colors duration-150 bajo:py-2 ${
+                        activo ? 'font-semibold text-foreground' : 'font-medium text-muted hover:text-foreground'
+                      }`}
                     >
-                      Volver a iniciar sesión
-                    </button>
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-            <div
-              role="tablist"
-              aria-label="Modo de acceso"
-              className="relative grid grid-cols-2 rounded-xl bg-background p-1"
-            >
-              <span
-                aria-hidden="true"
-                className={`absolute inset-y-1 left-1 z-0 w-[calc(50%-0.25rem)] rounded-lg bg-brand shadow-[0_1px_3px_rgba(31,41,55,0.18),0_2px_6px_-2px_rgba(31,41,55,0.12)] transition-transform duration-200 ease-out ${
-                  modo === 'registro' ? 'translate-x-full' : 'translate-x-0'
-                }`}
-              />
-              <button
-                type="button"
-                role="tab"
-                id="tab-entrar"
-                aria-selected={modo === 'login'}
-                aria-controls="auth-formulario"
-                onClick={() => setModo('login')}
-                className={`relative z-10 rounded-lg py-3 text-center text-[14px] transition-colors duration-150 ${
-                  modo === 'login'
-                    ? 'font-semibold text-foreground'
-                    : 'font-medium text-muted hover:text-foreground'
-                }`}
-              >
-                Iniciar sesión
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="tab-crear"
-                aria-selected={modo === 'registro'}
-                aria-controls="auth-formulario"
-                onClick={() => setModo('registro')}
-                className={`relative z-10 rounded-lg py-3 text-center text-[14px] transition-colors duration-150 ${
-                  modo === 'registro'
-                    ? 'font-semibold text-foreground'
-                    : 'font-medium text-muted hover:text-foreground'
-                }`}
-              >
-                Crear cuenta
-              </button>
-            </div>
-
-            {ocupado ? (
-              <div className="animate-bkn-in mt-4 grid place-items-center py-14 lg:mt-5 lg:h-[480px]">
-                <BaknazoLoader mensaje={mensajeCarga} />
-              </div>
-            ) : modo === 'login' ? (
-              <div
-                key={modo}
-                id="auth-formulario"
-                role="tabpanel"
-                aria-labelledby="tab-entrar"
-                className="animate-bkn-in mt-4 lg:mt-5 lg:flex lg:h-[480px] lg:flex-col"
-              >
-                <div className="lg:my-auto">
-                {errorLogin && (
-                  <div className={alertaError} role="alert">
-                    <IconoAlerta />
-                    <span>{errorLogin}</span>
-                  </div>
-                )}
-
-                <BotonGoogle
-                  clientId={googleClientId}
-                  tipo="continuar"
-                  cargando={cargando === 'google'}
-                  deshabilitado={ocupado}
-                  onCredencial={manejarGoogleSuccess}
-                  onError={notificarError}
-                />
-
-                <div className="my-4 flex items-center gap-3 text-[12px] text-muted">
-                  <span className="h-px flex-1 bg-border" />
-                  o continúa con tu correo
-                  <span className="h-px flex-1 bg-border" />
-                </div>
-
-                <form onSubmit={manejarManualSubmit} noValidate className="space-y-4">
-                  <label className="block">
-                    <span className="mb-1.5 block text-[13px] font-medium text-muted">
-                      Correo
-                    </span>
-                    <input
-                      type="email"
-                      autoComplete="email"
-                      placeholder="usuario@correo.com"
-                      value={correo}
-                      onChange={(e) => setCorreo(e.target.value)}
-                      disabled={ocupado}
-                      className={inputBase}
-                    />
-                  </label>
-
-                  <div>
-                    <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                      <span
-                        id="etiqueta-clave"
-                        className="text-[13px] font-medium text-muted"
-                      >
-                        Contraseña
-                      </span>
-                      <button
-                        type="button"
-                        onClick={manejarRecuperar}
-                        disabled={ocupado}
-                        className="text-[13px] font-medium text-accent hover:underline disabled:opacity-50"
-                      >
-                        ¿Olvidaste tu contraseña?
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type={verClave ? 'text' : 'password'}
-                        autoComplete="current-password"
-                        aria-labelledby="etiqueta-clave"
-                        placeholder="••••••••"
-                        value={contrasena}
-                        onChange={(e) => setContrasena(e.target.value)}
-                        disabled={ocupado}
-                        className={campoClase}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setVerClave((v) => !v)}
-                        aria-label={
-                          verClave ? 'Ocultar contraseña' : 'Mostrar contraseña'
-                        }
-                        className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-muted transition-colors hover:text-foreground"
-                      >
-                        <IconoOjo abierto={verClave} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <label className="flex w-fit cursor-pointer items-center gap-2.5 text-[13px] text-foreground">
-                    <input
-                      type="checkbox"
-                      checked={recordarme}
-                      onChange={(e) => setRecordarme(e.target.checked)}
-                      disabled={ocupado}
-                      className="size-4 accent-accent"
-                    />
-                    Mantener sesión iniciada
-                  </label>
-
-                  <button type="submit" disabled={ocupado} className={botonPrimario}>
-                    {cargando === 'manual' ? <BaknazoLoader tamano="boton" mensaje="Entrando" /> : 'Iniciar sesión'}
-                  </button>
-                </form>
-                </div>
-              </div>
-            ) : (
-              <div
-                key={modo}
-                id="auth-formulario"
-                role="tabpanel"
-                aria-labelledby="tab-crear"
-                className="animate-bkn-in mt-4 lg:mt-5 lg:flex lg:h-[480px] lg:flex-col"
-              >
-                <div className="lg:my-auto">
-                {errorRegistro && (
-                  <div className={alertaError} role="alert">
-                    <IconoAlerta />
-                    <span>{errorRegistro}</span>
-                  </div>
-                )}
-
-                <BotonGoogle
-                  clientId={googleClientId}
-                  tipo="registrarse"
-                  cargando={cargando === 'google'}
-                  deshabilitado={ocupado}
-                  onCredencial={(idToken) => {
-                    setErrorRegistro(null);
-                    manejarGoogleSuccess(idToken);
-                  }}
-                  onError={notificarError}
-                />
-
-                <div className="my-4 flex items-center gap-3 text-[12px] text-muted">
-                  <span className="h-px flex-1 bg-border" />
-                  o continúa con tu correo
-                  <span className="h-px flex-1 bg-border" />
-                </div>
-
-                <form
-                  onSubmit={manejarRegistroSubmit}
-                  noValidate
-                  className="space-y-4"
-                >
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="block">
-                      <span className="mb-1.5 block text-[13px] font-medium text-muted">
-                        Nombres
-                      </span>
-                      <input
-                        type="text"
-                        autoComplete="given-name"
-                        placeholder="Juan"
-                        value={nombres}
-                        onChange={(e) => setNombres(e.target.value)}
-                        className={inputBase}
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1.5 block text-[13px] font-medium text-muted">
-                        Apellidos
-                      </span>
-                      <input
-                        type="text"
-                        autoComplete="family-name"
-                        placeholder="Pérez"
-                        value={apellidos}
-                        onChange={(e) => setApellidos(e.target.value)}
-                        className={inputBase}
-                      />
-                    </label>
-                  </div>
-
-                  <label className="block">
-                    <span className="mb-1.5 block text-[13px] font-medium text-muted">
-                      Correo
-                    </span>
-                    <input
-                      type="email"
-                      autoComplete="email"
-                      placeholder="usuario@correo.com"
-                      value={correoReg}
-                      onChange={(e) => setCorreoReg(e.target.value)}
-                      className={inputBase}
-                    />
-                  </label>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <span className="mb-1.5 block text-[13px] font-medium text-muted">
-                        Contraseña
-                      </span>
-                      <div className="relative">
-                        <input
-                          type={verClaveReg ? 'text' : 'password'}
-                          autoComplete="new-password"
-                          placeholder="ClaveSegura1!"
-                          value={contrasenaReg}
-                          onChange={(e) => setContrasenaReg(e.target.value)}
-                          className={campoClase}
+                      {/* La pastilla amarilla viaja de una pestaña a la otra. */}
+                      {activo && (
+                        <m.span
+                          layoutId="pastilla-acceso"
+                          transition={RESORTE}
+                          aria-hidden="true"
+                          className="absolute inset-0 rounded-lg bg-brand shadow-[0_1px_3px_rgba(31,41,55,0.18),0_2px_6px_-2px_rgba(31,41,55,0.12)]"
                         />
+                      )}
+                      <span className="relative">{opcion === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <AlturaAnimada className={vinculacion ? '' : 'mt-3'}>
+              <AnimatePresence mode="popLayout" initial={false} custom={direccion}>
+                {tarjetaOcupada ? (
+                  <m.div
+                    key="cargando"
+                    className="grid place-items-center py-16"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <BaknazoLoader mensaje={mensajeCarga} />
+                  </m.div>
+                ) : vinculacion ? (
+                  <m.div
+                    key={`vincular-${vinculacion.correo}`}
+                    id="auth-vincular"
+                    custom={direccion}
+                    variants={PANEL}
+                    initial="oculto"
+                    animate="visible"
+                    exit="salida"
+                  >
+                    <Paso>
+                      <span className="inline-block rounded-md bg-background px-2.5 py-1 text-[11px] font-medium tracking-[0.14em] text-muted uppercase">
+                        Vinculación con Google
+                      </span>
+                      <p className="mt-3 text-[14px] leading-relaxed text-muted">
+                        {vinculacion.mensaje} Te enviamos un código de verificación a{' '}
+                        <strong className="font-medium text-foreground">{vinculacion.correo || 'tu correo'}</strong>.
+                      </p>
+                    </Paso>
+
+                    {errorVinculacion && (
+                      <div className={`${alertaError} mt-4`} role="alert">
+                        <IconoAlerta />
+                        <span>{errorVinculacion}</span>
+                      </div>
+                    )}
+
+                    <form onSubmit={manejarVinculacionSubmit} noValidate className="mt-5 space-y-4">
+                      <Paso>
+                        <label className="block">
+                          <span className={etiqueta}>Código de verificación</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            placeholder="000000"
+                            value={codigo}
+                            onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            disabled={cargando === 'vinculacion'}
+                            className={`${inputBase} text-center text-[18px] font-semibold tracking-[0.4em]`}
+                          />
+                        </label>
+                      </Paso>
+                      <Paso>
+                        <button type="submit" disabled={cargando === 'vinculacion'} className={botonPrimario}>
+                          {cargando === 'vinculacion' ? <BaknazoLoader tamano="boton" mensaje="Verificando" /> : 'Verificar y continuar'}
+                        </button>
+                      </Paso>
+                    </form>
+
+                    <Paso>
+                      <p className="mt-4 text-[12px] leading-relaxed text-muted">
+                        El código dura unos minutos y sirve una sola vez. Si no llega o ya no es válido, vuelve a entrar con
+                        Google para recibir uno nuevo.
+                      </p>
+                      <p className="mt-4 text-center">
                         <button
                           type="button"
-                          onClick={() => setVerClaveReg((v) => !v)}
-                          aria-label={
-                            verClaveReg
-                              ? 'Ocultar contraseña'
-                              : 'Mostrar contraseña'
-                          }
-                          className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-muted transition-colors hover:text-foreground"
+                          onClick={() => {
+                            setDireccion(-1);
+                            setVinculacion(null);
+                            setErrorVinculacion(null);
+                            setCodigo('');
+                          }}
+                          disabled={cargando === 'vinculacion'}
+                          className="text-[13px] font-medium text-accent hover:underline disabled:opacity-50"
                         >
-                          <IconoOjo abierto={verClaveReg} />
+                          Volver a iniciar sesión
                         </button>
+                      </p>
+                    </Paso>
+                  </m.div>
+                ) : modo === 'login' ? (
+                  <m.div
+                    key="login"
+                    id="auth-formulario"
+                    role="tabpanel"
+                    aria-labelledby="tab-entrar"
+                    custom={direccion}
+                    variants={PANEL}
+                    initial="oculto"
+                    animate="visible"
+                    exit="salida"
+                  >
+                    {errorLogin && (
+                      <div className={alertaError} role="alert">
+                        <IconoAlerta />
+                        <span>{errorLogin}</span>
                       </div>
-                    </div>
+                    )}
 
-                    <label className="block">
-                      <span className="mb-1.5 block text-[13px] font-medium text-muted">
-                        Repetir contraseña
-                      </span>
-                      <input
-                        type={verClaveReg ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        placeholder="••••••••"
-                        value={confirmar}
-                        onChange={(e) => setConfirmar(e.target.value)}
-                        className={inputBase}
+                    <Paso>
+                      <BotonGoogle
+                        clientId={googleClientId}
+                        tipo="continuar"
+                        cargando={false}
+                        deshabilitado={ocupado}
+                        onCredencial={manejarGoogleSuccess}
+                        onError={notificarError}
                       />
-                    </label>
-                  </div>
+                    </Paso>
 
-                  <ul className="grid gap-1.5 sm:grid-cols-2">
-                    {reglas.map((regla) => (
-                      <li
-                        key={regla.id}
-                        className={`flex items-center gap-2 text-[12px] ${
-                          regla.cumple
-                            ? 'text-success-deep'
-                            : tocado
-                              ? 'text-danger-deep'
-                              : 'text-muted'
-                        }`}
-                      >
-                        <IconoCheck ok={regla.cumple} />
-                        {regla.texto}
-                      </li>
-                    ))}
-                  </ul>
+                    {separador}
 
-                  <button type="submit" className={botonPrimario}>
-                    Continuar
-                  </button>
-                </form>
-                </div>
-              </div>
-            )}
-              </>
-            )}
-          </div>
+                    <form onSubmit={manejarManualSubmit} noValidate className="space-y-4 bajo:space-y-3">
+                      <Paso>
+                        <label className="block">
+                          <span className={etiqueta}>Correo</span>
+                          <input
+                            type="email"
+                            autoComplete="email"
+                            placeholder="usuario@correo.com"
+                            value={correo}
+                            onChange={(e) => setCorreo(e.target.value)}
+                            disabled={ocupado}
+                            className={inputBase}
+                          />
+                        </label>
+                      </Paso>
 
-          <p className="mt-4 flex items-center justify-center gap-2.5 text-[13px] text-muted">
-            <span className="grid size-5 shrink-0 place-items-center text-accent">
-              <IconoEscudo />
+                      <Paso>
+                        <div className="mb-1.5 flex items-baseline justify-between gap-3 bajo:mb-1">
+                          <span id="etiqueta-clave" className="text-[13px] font-medium text-muted">
+                            Contraseña
+                          </span>
+                          <button
+                            type="button"
+                            onClick={manejarRecuperar}
+                            disabled={ocupado}
+                            className="text-[13px] font-medium text-accent hover:underline disabled:opacity-50"
+                          >
+                            ¿Olvidaste tu contraseña?
+                          </button>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={verClave ? 'text' : 'password'}
+                            autoComplete="current-password"
+                            aria-labelledby="etiqueta-clave"
+                            placeholder="••••••••"
+                            value={contrasena}
+                            onChange={(e) => setContrasena(e.target.value)}
+                            disabled={ocupado}
+                            className={campoClase}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setVerClave((v) => !v)}
+                            aria-label={verClave ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                            className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-muted transition-colors hover:text-foreground"
+                          >
+                            <IconoOjo abierto={verClave} />
+                          </button>
+                        </div>
+                      </Paso>
+
+                      <Paso>
+                        <label className="flex w-fit cursor-pointer items-center gap-2.5 text-[13px] text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={recordarme}
+                            onChange={(e) => setRecordarme(e.target.checked)}
+                            disabled={ocupado}
+                            className="size-4 accent-accent"
+                          />
+                          Mantener sesión iniciada
+                        </label>
+                      </Paso>
+
+                      <Paso>
+                        <button type="submit" disabled={ocupado} className={botonPrimario}>
+                          {cargando === 'manual' ? <BaknazoLoader tamano="boton" mensaje="Entrando" /> : 'Iniciar sesión'}
+                        </button>
+                      </Paso>
+                    </form>
+                  </m.div>
+                ) : (
+                  <m.div
+                    key="registro"
+                    id="auth-formulario"
+                    role="tabpanel"
+                    aria-labelledby="tab-crear"
+                    custom={direccion}
+                    variants={PANEL}
+                    initial="oculto"
+                    animate="visible"
+                    exit="salida"
+                  >
+                    {errorRegistro && (
+                      <div className={alertaError} role="alert">
+                        <IconoAlerta />
+                        <span>{errorRegistro}</span>
+                      </div>
+                    )}
+
+                    <Paso>
+                      <BotonGoogle
+                        clientId={googleClientId}
+                        tipo="registrarse"
+                        cargando={false}
+                        deshabilitado={ocupado}
+                        onCredencial={(idToken) => {
+                          setErrorRegistro(null);
+                          manejarGoogleSuccess(idToken);
+                        }}
+                        onError={notificarError}
+                      />
+                    </Paso>
+
+                    {separador}
+
+                    <form onSubmit={manejarRegistroSubmit} noValidate className="space-y-4 bajo:space-y-3">
+                      <Paso className="grid grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className={etiqueta}>Nombres</span>
+                          <input
+                            type="text"
+                            autoComplete="given-name"
+                            placeholder="Juan"
+                            value={nombres}
+                            onChange={(e) => setNombres(e.target.value)}
+                            className={inputBase}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className={etiqueta}>Apellidos</span>
+                          <input
+                            type="text"
+                            autoComplete="family-name"
+                            placeholder="Pérez"
+                            value={apellidos}
+                            onChange={(e) => setApellidos(e.target.value)}
+                            className={inputBase}
+                          />
+                        </label>
+                      </Paso>
+
+                      <Paso>
+                        <label className="block">
+                          <span className={etiqueta}>Correo</span>
+                          <input
+                            type="email"
+                            autoComplete="email"
+                            placeholder="usuario@correo.com"
+                            value={correoReg}
+                            onChange={(e) => setCorreoReg(e.target.value)}
+                            className={inputBase}
+                          />
+                        </label>
+                      </Paso>
+
+                      <Paso className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <span className={etiqueta}>Contraseña</span>
+                          <div className="relative">
+                            <input
+                              type={verClaveReg ? 'text' : 'password'}
+                              autoComplete="new-password"
+                              placeholder="ClaveSegura1!"
+                              aria-label="Contraseña"
+                              value={contrasenaReg}
+                              onChange={(e) => setContrasenaReg(e.target.value)}
+                              className={campoClase}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setVerClaveReg((v) => !v)}
+                              aria-label={verClaveReg ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-muted transition-colors hover:text-foreground"
+                            >
+                              <IconoOjo abierto={verClaveReg} />
+                            </button>
+                          </div>
+                        </div>
+                        <label className="block">
+                          <span className={etiqueta}>Repetir contraseña</span>
+                          <input
+                            type={verClaveReg ? 'text' : 'password'}
+                            autoComplete="new-password"
+                            placeholder="••••••••"
+                            value={confirmar}
+                            onChange={(e) => setConfirmar(e.target.value)}
+                            className={inputBase}
+                          />
+                        </label>
+                      </Paso>
+
+                      <Paso>
+                        <ul className="grid gap-x-3 gap-y-1 sm:grid-cols-2 bajo:gap-y-0.5 bajo:text-[11.5px]">
+                          {reglas.map((regla) => (
+                            <li
+                              key={regla.id}
+                              className={`flex items-center gap-2 text-[12px] transition-colors bajo:text-[11.5px] ${
+                                regla.cumple ? 'text-success-deep' : tocado ? 'text-danger-deep' : 'text-muted'
+                              }`}
+                            >
+                              <IconoCheck ok={regla.cumple} />
+                              {regla.texto}
+                            </li>
+                          ))}
+                        </ul>
+                      </Paso>
+
+                      <Paso>
+                        <button type="submit" className={botonPrimario}>
+                          Continuar
+                        </button>
+                      </Paso>
+                    </form>
+                  </m.div>
+                )}
+              </AnimatePresence>
+            </AlturaAnimada>
+          </m.div>
+
+          {/* Para quien vino a mirar y no a entrar: una fila al final, sin
+              competir con el formulario. */}
+          <a href="/" className="group mt-6 flex items-center justify-between gap-4 border-t border-border pt-4 bajo:mt-3 bajo:pt-3">
+            <span className="min-w-0">
+              <span className="block text-[14.5px] font-semibold text-foreground">¿Solo vienes a mirar?</span>
+              <span className="mt-0.5 block text-[13px] leading-snug text-muted bajo:hidden">Mira lo que se vende cerca de ti, sin crear cuenta.</span>
             </span>
-            Tus datos protegidos
-          </p>
+            <span className="shrink-0 text-[14px] font-semibold whitespace-nowrap text-foreground underline decoration-brand decoration-[3px] underline-offset-[6px] transition-[text-decoration-color] group-hover:decoration-foreground">
+              Ver anuncios
+            </span>
+          </a>
         </div>
       </main>
     </div>

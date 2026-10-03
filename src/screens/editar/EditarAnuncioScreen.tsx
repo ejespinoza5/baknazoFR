@@ -7,10 +7,12 @@ import { IconoAlerta, IconoInfo } from '../../components/Iconos';
 import {
   editarAnuncio,
   erroresDeValidacion,
+  esBloqueoDeModeracion,
   obtenerAnuncio,
   obtenerCatalogos,
 } from '../../api/anuncios';
-import { notificarAviso, notificarExito, notificarInfo } from '../../lib/notificar';
+import AvisoModeracion from '../../components/AvisoModeracion';
+import { notificarAviso, notificarError, notificarExito, notificarInfo } from '../../lib/notificar';
 import { telefonoDeContacto, telefonoPlausible } from '../../lib/contacto';
 import { actualizarPerfil } from '../../api/auth';
 import { urlCompleta } from '../../lib/imagen';
@@ -20,6 +22,7 @@ import { ESTILO_PILAR } from '../../lib/pilares';
 import {
   DETALLE_POR_PILAR,
   detalleDeFormulario,
+  firmaPreguntas,
   formularioDesdeAnuncio,
   mapearErrores,
   normalizarPrecio,
@@ -37,6 +40,7 @@ import type {
   Catalogos,
   EstadoAnuncio,
   EstadoEditable,
+  PreguntaEmpleo,
 } from '../../types/anuncio';
 import BaknazoLoader from '../../components/BaknazoLoader';
 
@@ -73,6 +77,9 @@ const ACCIONES: Record<
   BORRADOR: [
     { texto: 'Publicar', destino: 'PUBLICADO', ayuda: 'Aparece en el feed.' },
   ],
+  // En revisión lo libera un administrador; el dueño solo puede editarlo.
+  PENDIENTE_REVISION: [],
+  // Rechazado: al editarlo y guardar, vuelve a revisión.
   RECHAZADO: [],
   ELIMINADO: [],
 };
@@ -279,7 +286,12 @@ export default function EditarAnuncioScreen({
     // solo si alguno de sus campos del pilar cambió de verdad.
     const nuevo = detalleDeFormulario(pilar!, form) as unknown as Record<string, unknown>;
     const actual = anuncio.detalle as unknown as Record<string, unknown>;
-    if (DETALLE_POR_PILAR[pilar!].some((clave) => nuevo[clave] !== actual[clave]))
+    // Las preguntas de una vacante se comparan enteras (texto, tipo, opciones, orden).
+    const cambianPreguntas =
+      pilar === 'empleo' &&
+      firmaPreguntas(nuevo.preguntas as PreguntaEmpleo[] | undefined) !==
+        firmaPreguntas(actual.preguntas as PreguntaEmpleo[] | undefined);
+    if (cambianPreguntas || DETALLE_POR_PILAR[pilar!].some((clave) => nuevo[clave] !== actual[clave]))
       cambios.detalle = detalleDeFormulario(pilar!, form);
 
     // `fotosConservar` es el orden nuevo: la que quede de primera es la portada
@@ -365,13 +377,21 @@ export default function EditarAnuncioScreen({
       );
       setGaleria({ existentes: respuesta.anuncio.fotos, nuevas: [] });
       setErrores({});
-      notificarExito('Guardamos los cambios de tu anuncio.');
+      // Si el cambio lo mandó a revisión (o reenvió uno rechazado), se dice.
+      if (respuesta.anuncio.estado === 'PENDIENTE_REVISION' && anuncio.estado !== 'PENDIENTE_REVISION') {
+        notificarAviso('Guardamos tus cambios. Tu anuncio pasó a revisión y se mostrará cuando lo aprobemos; te avisaremos.');
+      } else {
+        notificarExito('Guardamos los cambios de tu anuncio.');
+      }
     } catch (e) {
       const delServidor = erroresDeValidacion(e);
       const mapeados = delServidor ? mapearErrores(delServidor) : null;
       if (mapeados && Object.keys(mapeados).length > 0) {
         setErrores(mapeados);
         setVerPrevia(true);
+        if (esBloqueoDeModeracion(delServidor)) {
+          notificarError('No se guardaron los cambios: hay contenido que las normas de Baknazo no permiten. Revisa los campos marcados.');
+        }
       } else {
         notificarAviso(
           e instanceof Error ? e.message : 'No se pudo guardar el anuncio.'
@@ -509,6 +529,18 @@ export default function EditarAnuncioScreen({
                 telefonoNuevoValido={telefonoNuevoValido}
                 avisos={
                   <>
+                    <AvisoModeracion
+                      enEdicion
+                      // Solo si cambió lo que se vuelve a validar al guardar.
+                      activo={
+                        form.titulo !== anuncio.titulo ||
+                        form.descripcion !== (anuncio.descripcion ?? '') ||
+                        form.categoriaId !== (anuncio.categoria?.id ?? '')
+                      }
+                      titulo={form.titulo}
+                      descripcion={form.descripcion}
+                      categoriaId={form.categoriaId === '' ? null : form.categoriaId}
+                    />
                     {anuncio.notasModeracion && (
                       <p className={avisoInfo} role="note">
                         <IconoInfo />
@@ -567,6 +599,7 @@ export default function EditarAnuncioScreen({
 
             <EstadoDelAnuncio
               estado={anuncio.estado}
+              bloqueadoPorModeracion={Boolean(anuncio.pausaAdministrativa)}
               notas={anuncio.notasModeracion ?? null}
               ocupado={cambiandoEstado}
               onCambiar={cambiarEstado}
@@ -611,16 +644,19 @@ export default function EditarAnuncioScreen({
  */
 function EstadoDelAnuncio({
   estado,
+  bloqueadoPorModeracion,
   notas,
   ocupado,
   onCambiar,
 }: {
   estado: Anuncio['estado'];
+  /** Pausado por moderación: el dueño no lo puede reanudar. */
+  bloqueadoPorModeracion: boolean;
   notas: string | null;
   ocupado: boolean;
   onCambiar: (destino: EstadoEditable) => void;
 }) {
-  const acciones = ACCIONES[estado] ?? [];
+  const acciones = bloqueadoPorModeracion ? [] : (ACCIONES[estado] ?? []);
   if (acciones.length === 0 && !notas) return null;
 
   return (

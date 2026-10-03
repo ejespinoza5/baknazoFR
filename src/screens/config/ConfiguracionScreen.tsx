@@ -3,14 +3,21 @@ import { useSearchParams } from 'react-router-dom';
 import { actualizarPerfil } from '../../api/auth';
 import { urlCompleta } from '../../lib/imagen';
 import MarcoApp from '../../components/MarcoApp';
+import AjustesNotificaciones from '../../components/AjustesNotificaciones';
 import {
   IconoAlerta,
+  IconoCampana,
   IconoCandado,
   IconoLapiz,
   IconoOjo,
   IconoPapelera,
+  IconoSoporte,
   IconoTelefono,
 } from '../../components/Iconos';
+import ChatSoporte from '../../components/ChatSoporte';
+import { useSoporteNoLeidos } from '../../lib/soporte';
+import { m } from 'motion/react';
+import { RESORTE } from '../../lib/movimiento';
 import PanelPrivacidad from './PanelPrivacidad';
 import SelectorImagen from '../../components/SelectorImagen';
 import RecortadorImagen from '../../components/RecortadorImagen';
@@ -40,7 +47,7 @@ import type {
   Sesion,
 } from '../../types/auth';
 
-type Pestana = 'perfil' | 'privacidad' | 'seguridad';
+type Pestana = 'perfil' | 'privacidad' | 'notificaciones' | 'seguridad' | 'soporte';
 
 /**
  * Números de teléfono: dígitos, espacios, paréntesis, guiones y el `+` de
@@ -53,7 +60,9 @@ const PATRON_TELEFONO = /^[+\d\s()-]{7,20}$/;
 const PESTANAS: { id: Pestana; label: string; icono: ReactNode }[] = [
   { id: 'perfil', label: 'Editar perfil', icono: <IconoLapiz /> },
   { id: 'privacidad', label: 'Privacidad', icono: <IconoOjo abierto /> },
+  { id: 'notificaciones', label: 'Notificaciones', icono: <IconoCampana /> },
   { id: 'seguridad', label: 'Seguridad', icono: <IconoCandado /> },
+  { id: 'soporte', label: 'Ayuda y soporte', icono: <IconoSoporte /> },
 ];
 
 interface Props {
@@ -310,7 +319,10 @@ function FormularioConfiguracion({
   const [parametros, setParametros] = useSearchParams();
   const pedida = parametros.get('seccion');
   const pestana: Pestana =
-    pedida === 'privacidad' || pedida === 'seguridad' ? pedida : 'perfil';
+    pedida === 'privacidad' || pedida === 'notificaciones' || pedida === 'seguridad' || pedida === 'soporte'
+      ? pedida
+      : 'perfil';
+  const soporteSinLeer = useSoporteNoLeidos();
   const setPestana = (nueva: Pestana) =>
     setParametros(nueva === 'perfil' ? {} : { seccion: nueva }, { replace: true });
 
@@ -508,14 +520,27 @@ function FormularioConfiguracion({
                 aria-selected={activo}
                 aria-controls={`panel-${item.id}`}
                 onClick={() => setPestana(item.id)}
-                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[13.5px] font-medium whitespace-nowrap transition-colors sm:px-3.5 ${
-                  activo
-                    ? 'bg-foreground text-white'
-                    : 'text-muted hover:bg-background hover:text-foreground'
+                className={`relative flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[13.5px] font-medium whitespace-nowrap transition-colors duration-200 sm:px-3.5 ${
+                  activo ? 'text-white' : 'text-muted hover:bg-background hover:text-foreground'
                 }`}
               >
-                {item.icono}
-                {item.label}
+                {/* El fondo oscuro se desliza hasta la pestaña elegida. */}
+                {activo && (
+                  <m.span
+                    layoutId="pestana-configuracion"
+                    transition={RESORTE}
+                    aria-hidden="true"
+                    className="absolute inset-0 rounded-lg bg-foreground"
+                  />
+                )}
+                <span className="relative">{item.icono}</span>
+                <span className="relative">{item.label}</span>
+                {item.id === 'soporte' && soporteSinLeer > 0 && !activo && (
+                  <span className="relative grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1.5 text-[11px] font-bold text-carbon tabular-nums">
+                    {soporteSinLeer > 9 ? '9+' : soporteSinLeer}
+                    <span className="sr-only"> sin leer</span>
+                  </span>
+                )}
               </button>
             );
           })}
@@ -529,6 +554,33 @@ function FormularioConfiguracion({
             className="animate-bkn-in mt-6"
           >
             <PanelPrivacidad perfil={perfil} onPerfilActualizado={onPerfilActualizado} />
+          </div>
+        ) : pestana === 'notificaciones' ? (
+          <div
+            role="tabpanel"
+            id="panel-notificaciones"
+            aria-labelledby="pestana-notificaciones"
+            className="animate-bkn-in mt-6 max-w-[760px]"
+          >
+            {/* El mismo panel que "Ajustes" en Notificaciones: un solo componente,
+                así los dos sitios muestran y guardan lo mismo. */}
+            <AjustesNotificaciones />
+          </div>
+        ) : pestana === 'soporte' ? (
+          <div
+            role="tabpanel"
+            id="panel-soporte"
+            aria-labelledby="pestana-soporte"
+            className="animate-bkn-in mt-6 max-w-[760px]"
+          >
+            {/* La misma conversación que el botón flotante de escritorio. */}
+            <div className="h-[min(620px,calc(100svh-17rem))] min-h-[420px] overflow-hidden rounded-2xl border border-border bg-white">
+              <ChatSoporte />
+            </div>
+            <p className="mt-3 px-1 text-[12.5px] leading-relaxed text-muted">
+              Para reportar un anuncio concreto, usa también <strong className="font-semibold text-foreground">Denunciar</strong>{' '}
+              dentro del anuncio: llega directo a moderación.
+            </p>
           </div>
         ) : pestana === 'seguridad' ? (
           <div

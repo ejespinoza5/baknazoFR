@@ -254,6 +254,13 @@ async function canjear(actual: Sesion | null): Promise<Sesion> {
     throw errorApi(SIN_CONEXION);
   }
 
+  // 204: no hay cookie de sesión (un visitante). Es la respuesta normal al
+  // abrir la app sin cuenta; se trata como "sin sesión", igual que un 401.
+  if (respuesta.status === 204) {
+    if (actual) salir();
+    throw errorApi('No hay sesión iniciada', 401);
+  }
+
   const texto = await respuesta.text();
   const datos = texto ? parsear(texto) : null;
 

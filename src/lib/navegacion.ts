@@ -19,10 +19,18 @@ export interface Navegacion {
   irAConfiguracion: () => void;
   irAExplorar: () => void;
   irAPostulaciones: () => void;
+  /** Solo negocios: el módulo de vacantes con sus candidatos. */
+  irAVacantes: () => void;
+  /** La bandeja del chat. */
+  irAMensajes: () => void;
   irAGuardados: () => void;
   /** Al perfil propio. Usa el id de la sesión: no espera a que cargue GET /me. */
   irAMiPerfil: () => void;
-  irAlLogin: () => void;
+  /**
+   * Al login, y de vuelta a `destino` (por defecto, la pantalla actual) al
+   * entrar o terminar de crear la cuenta.
+   */
+  irAlLogin: (destino?: string) => void;
   cerrarSesion: () => void;
 }
 

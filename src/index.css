@@ -1,8 +1,16 @@
 @import 'tailwindcss';
 
+/* PC con poco alto (laptops de 768 px): el login compacta sus espacios para
+   caber entero en la pantalla, sin scroll. Uso: bajo:h-10, bajo:py-4… */
+@custom-variant bajo (@media (min-width: 1024px) and (max-height: 800px));
+/* Aún más bajo (laptops con la barra del navegador): se ocultan textos de apoyo. */
+@custom-variant muybajo (@media (min-width: 1024px) and (max-height: 700px));
+
 @theme {
   --font-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, Consolas, monospace;
+  /* Titulares de la landing: ancha y pesada, como un rótulo pintado de tienda de barrio. */
+  --font-display: 'Archivo', 'Geist', system-ui, sans-serif;
 
   /* ---------- Tokens semánticos (sistema de diseño oficial) ---------- */
   --color-brand: #ffb800; /* Amarillo dorado: CTAs primarios */
@@ -65,6 +73,171 @@
     outline: none;
   }
 }
+
+/* Barra de desplazamiento para fondos oscuros (menú del panel): fina, del
+   tono del fondo y visible solo al pasar el cursor o al desplazar. */
+.barra-discreta {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: stable;
+}
+.barra-discreta:hover,
+.barra-discreta:focus-within {
+  scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+}
+.barra-discreta::-webkit-scrollbar {
+  width: 8px;
+}
+.barra-discreta::-webkit-scrollbar-track {
+  background: transparent;
+}
+.barra-discreta::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background: transparent;
+  background-clip: padding-box;
+}
+.barra-discreta:hover::-webkit-scrollbar-thumb {
+  background-color: rgb(255 255 255 / 0.18);
+}
+
+/* Barra fina para listas sobre fondo blanco (el selector). */
+.barra-clara {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(31 41 55 / 0.22) transparent;
+}
+.barra-clara::-webkit-scrollbar {
+  width: 8px;
+}
+.barra-clara::-webkit-scrollbar-track {
+  background: transparent;
+}
+.barra-clara::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background-color: rgb(31 41 55 / 0.22);
+  background-clip: padding-box;
+}
+
+/* ---------- Landing ---------- */
+
+/* Titular de rótulo: Archivo ancha y pesada, interlineado apretado. */
+.titular {
+  font-family: var(--font-display);
+  font-stretch: 116%;
+  font-weight: 850;
+  letter-spacing: -0.025em;
+  line-height: 0.94;
+  text-wrap: balance;
+}
+
+/* Las columnas de fotos de la portada se deslizan sin fin (el contenido va duplicado). */
+@keyframes bkn-deriva {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+@keyframes bkn-deriva-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-bkn-deriva {
+  animation: bkn-deriva 48s linear infinite;
+}
+.animate-bkn-deriva-lenta {
+  animation: bkn-deriva 64s linear infinite reverse;
+}
+.animate-bkn-deriva-x {
+  animation: bkn-deriva-x 40s linear infinite;
+}
+.pausar-al-pasar:hover .animate-bkn-deriva,
+.pausar-al-pasar:hover .animate-bkn-deriva-lenta,
+.pausar-al-pasar:hover .animate-bkn-deriva-x {
+  animation-play-state: paused;
+}
+
+/* Entrada escalonada del texto de la portada. */
+@keyframes bkn-asoma {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-bkn-asoma {
+  animation: bkn-asoma 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Secciones que aparecen al llegar a ellas (ver useRevelar). Sin JS se ven igual. */
+[data-revelar='oculto'] {
+  opacity: 0;
+  transform: translateY(26px);
+}
+[data-revelar] {
+  transition:
+    opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* El trazo a mano bajo "bacán" se dibuja al cargar. */
+@keyframes bkn-trazo {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.animate-bkn-trazo {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: bkn-trazo 0.9s cubic-bezier(0.65, 0, 0.35, 1) 0.55s forwards;
+}
+
+/* Carril horizontal sin barra visible (categorías). */
+.sin-barra {
+  scrollbar-width: none;
+}
+.sin-barra::-webkit-scrollbar {
+  display: none;
+}
+
+/* Rejillas de anuncios: las tarjetas aparecen en cascada al cargar. Solo las
+   12 primeras se escalonan; las que llegan con "ver más" entran juntas. */
+@keyframes bkn-aparece {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.cascada > * {
+  animation: bkn-aparece 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cascada > :nth-child(2) { animation-delay: 35ms; }
+.cascada > :nth-child(3) { animation-delay: 70ms; }
+.cascada > :nth-child(4) { animation-delay: 105ms; }
+.cascada > :nth-child(5) { animation-delay: 140ms; }
+.cascada > :nth-child(6) { animation-delay: 175ms; }
+.cascada > :nth-child(7) { animation-delay: 210ms; }
+.cascada > :nth-child(8) { animation-delay: 245ms; }
+.cascada > :nth-child(9) { animation-delay: 280ms; }
+.cascada > :nth-child(10) { animation-delay: 315ms; }
+.cascada > :nth-child(11) { animation-delay: 350ms; }
+.cascada > :nth-child(12) { animation-delay: 385ms; }
 
 /* Entrada suave de paneles de formulario al cambiar de modo. */
 @keyframes bkn-in {

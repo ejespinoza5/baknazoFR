@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MarcoApp from '../../components/MarcoApp';
 import BaknazoLoader from '../../components/BaknazoLoader';
+import IconoCategoria from '../../components/IconoCategoria';
 import { IconoChevron, IconoLupa, IconoPin } from '../../components/Iconos';
 import { categoriasDe, useCatalogos, useResumenCatalogo } from '../../lib/catalogos';
 import { ESTILO_PILAR, NOMBRE_PILAR, type Pilar } from '../../lib/pilares';
@@ -10,6 +11,16 @@ const DESCRIPCION: Record<Pilar, string> = {
   productos: 'Nuevos y de segunda mano, de gente de tu ciudad.',
   servicios: 'Oficios, reparaciones, clases y profesionales.',
   empleo: 'Vacantes y trabajos, con postulación en línea.',
+};
+
+/**
+ * Al pasar el cursor el cuadro del ícono se llena con el color del pilar. Son
+ * literales completos porque Tailwind solo genera las clases que ve escritas.
+ */
+const AL_PASAR: Record<Pilar, string> = {
+  productos: 'group-hover:bg-brand group-hover:text-foreground',
+  servicios: 'group-hover:bg-accent group-hover:text-white',
+  empleo: 'group-hover:bg-empleo group-hover:text-white',
 };
 
 /**
@@ -111,30 +122,42 @@ export default function ExplorarScreen() {
               {categorias.length === 0 ? (
                 <BaknazoLoader tamano="seccion" mensaje="Cargando categorías" />
               ) : (
-                <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                <ul className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
                   {categorias.map((c) => {
                     const cuantos = resumen?.categorias[c.id] ?? 0;
+                    // Una vacía se ve, pero más apagada: no invita a entrar a nada.
+                    const vacia = Boolean(resumen) && cuantos === 0;
                     return (
                       <li key={c.id}>
                         <button
                           type="button"
                           onClick={() => ir({ pilar, categoria: String(c.id) })}
-                          className="group flex w-full items-center gap-3 rounded-lg px-2 py-3 text-left transition-colors hover:bg-white"
+                          className="group flex h-full w-full flex-col items-start gap-3 rounded-2xl border border-border bg-white p-3.5 text-left transition-colors hover:border-muted sm:p-4"
                         >
-                          <span
-                            aria-hidden="true"
-                            className={`grid size-9 shrink-0 place-items-center rounded-lg text-[13px] font-semibold ${estilo.fondo} ${estilo.tinta}`}
-                          >
-                            {c.nombre.charAt(0)}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[14.5px] font-medium text-foreground">{c.nombre}</span>
-                            <span className="block text-[12.5px] text-muted">
-                              {resumen ? (cuantos === 1 ? '1 anuncio' : `${cuantos} anuncios`) : ' '}
+                          <span className="flex w-full items-start justify-between gap-2">
+                            <span
+                              aria-hidden="true"
+                              className={`grid size-11 shrink-0 place-items-center rounded-xl transition-colors duration-200 ${estilo.fondo} ${estilo.tinta} ${AL_PASAR[pilar]} ${
+                                vacia ? 'opacity-60' : ''
+                              }`}
+                            >
+                              <IconoCategoria pilar={pilar} slug={c.slug} />
+                            </span>
+                            <span className="mt-0.5 text-muted opacity-0 transition-opacity group-hover:opacity-100 [&>svg]:size-4">
+                              <IconoChevron derecha />
                             </span>
                           </span>
-                          <span className="text-muted opacity-0 transition-opacity group-hover:opacity-100">
-                            <IconoChevron derecha />
+                          <span className="min-w-0">
+                            <span
+                              className={`block text-[14px] leading-snug font-semibold sm:text-[14.5px] ${
+                                vacia ? 'text-foreground/70' : 'text-foreground'
+                              }`}
+                            >
+                              {c.nombre}
+                            </span>
+                            <span className="mt-0.5 block min-h-[1lh] text-[12.5px] text-muted tabular-nums">
+                              {!resumen ? null : vacia ? 'Aún sin anuncios' : cuantos === 1 ? '1 anuncio' : `${cuantos} anuncios`}
+                            </span>
                           </span>
                         </button>
                       </li>

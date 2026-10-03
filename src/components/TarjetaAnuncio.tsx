@@ -10,7 +10,9 @@ import {
   IconoTelefono,
 } from './Iconos';
 import VisorGaleria from './VisorGaleria';
-import { CHAT_PENDIENTE } from '../lib/contacto';
+import MenuOpcionesAnuncio from './MenuOpcionesAnuncio';
+import PulgarAnimado from './PulgarAnimado';
+import { useAbrirChat } from '../lib/abrirChat';
 import { notificarExito, notificarInfo } from '../lib/notificar';
 import { useVistaEnPantalla } from '../lib/vistas';
 import { ESTILO_PILAR, type Pilar } from '../lib/pilares';
@@ -202,6 +204,7 @@ export default function TarjetaAnuncio({
   const lista = vista === 'lista';
 
   const navegar = useNavigate();
+  const { abrir: abrirChat, abriendo: abriendoChat } = useAbrirChat();
   const refArticulo = useRef<HTMLElement | null>(null);
 
   /**
@@ -425,10 +428,11 @@ export default function TarjetaAnuncio({
           <IconoTelefono />
           {pidiendoTelefono ? 'Buscando' : 'Ver número'}
         </BotonAccion>
-      ) : !esMio ? (
-        <BotonAccion key="principal" onClick={() => notificarInfo(CHAT_PENDIENTE)}>
+      ) : !esMio && pilar !== 'empleo' && id != null ? (
+        // Las vacantes no tienen chat: ahí se postula con el CV.
+        <BotonAccion key="principal" onClick={() => abrirChat({ anuncioId: id })} deshabilitado={abriendoChat}>
           <IconoChat />
-          Mensaje
+          {abriendoChat ? 'Abriendo' : 'Mensaje'}
         </BotonAccion>
       ) : pilar === 'empleo' && id != null ? (
         // Tu propia vacante: lo útil es ir directo a quién se postuló.
@@ -446,7 +450,7 @@ export default function TarjetaAnuncio({
   if (lista && puedeDarLike) {
     acciones.push(
       <BotonAccion key="like" onClick={alternarMeGusta} activo={meGusta} presionado={meGusta}>
-        <IconoPulgar lleno={meGusta} />
+        <PulgarAnimado lleno={meGusta} />
         Me gusta
       </BotonAccion>
     );
@@ -567,6 +571,8 @@ export default function TarjetaAnuncio({
               </span>
             )}
             {botonGuardar}
+            {/* Denunciar y demás opciones secundarias: nunca en lo propio. */}
+            {id != null && !esMio && <MenuOpcionesAnuncio anuncioId={id} titulo={titulo} />}
           </div>
 
           {/* ---------- Texto y detalles ---------- */}

@@ -20,7 +20,6 @@ import DetalleAnuncioModal from '../../components/DetalleAnuncioModal';
 import ModalContacto from '../../components/ModalContacto';
 import {
   IconoAlerta,
-  IconoCampana,
   IconoLista,
   IconoLupa,
   IconoMas,
@@ -38,9 +37,8 @@ import EsqueletoAnuncio from '../../components/EsqueletoAnuncio';
 import { useScrollInfinito } from '../../lib/scrollInfinito';
 import { notificarAviso, notificarError, notificarExito, notificarInfo } from '../../lib/notificar';
 import { urlCompleta } from '../../lib/imagen';
-import { leerPropios } from '../../lib/propios';
 import { useNavegacion } from '../../lib/navegacion';
-import { CHAT_PENDIENTE } from '../../lib/contacto';
+import { useAbrirChat } from '../../lib/abrirChat';
 import {
   guardarVistaAnuncios,
   leerVistaAnuncios,
@@ -71,15 +69,13 @@ type AnuncioAbierto = Pick<AnuncioTarjeta, 'id' | 'distanciaKm' | 'meGusta' | 'l
 /**
  * Traduce la respuesta de la API a lo que consume la tarjeta.
  *
- * `propios` son los ids que la app ya conoce como tuyos (ver `lib/propios`): se
- * mezclan con lo que marque el servidor para que el chat no te aparezca en tus
- * propios anuncios ni antes ni después de que el listado mande `esMio`.
+ * Si el anuncio es tuyo lo dice SOLO el servidor (`esMio`), que lo calcula con
+ * la sesión de la petición. Antes se mezclaba con una lista de ids guardada en
+ * el navegador, y esa lista era del navegador, no de la cuenta: tras usar otra
+ * cuenta en el mismo equipo, anuncios ajenos salían como propios (sin like ni
+ * mensaje, y con el texto del dueño).
  */
-function aTarjeta(
-  anuncio: AnuncioApi,
-  distanciaKm: number | null = null,
-  propios: Set<number> = new Set()
-): AnuncioTarjeta {
+function aTarjeta(anuncio: AnuncioApi, distanciaKm: number | null = null): AnuncioTarjeta {
   return {
     id: anuncio.id,
     titulo: anuncio.titulo,
@@ -100,7 +96,7 @@ function aTarjeta(
     verificado: anuncio.autor.verificado,
     esNegocio: anuncio.autor.esNegocio,
     },
-    esMio: anuncio.esMio || propios.has(anuncio.id),
+    esMio: anuncio.esMio,
     // Los likes llegan con cada anuncio del listado, así que la tarjeta y la
     // ficha parten del mismo número sin pedirlo otra vez al abrir.
     likes: anuncio.likes,
@@ -237,6 +233,8 @@ export default function FeedScreen({
   onCambiarAnuncioAbierto,
   onAbrirPerfil,
 }: Props) {
+  const { abrir: abrirChat } = useAbrirChat();
+
   /* ---------- Filtros: viven en la URL ---------- */
 
   const [parametros, setParametros] = useSearchParams();
@@ -327,16 +325,10 @@ export default function FeedScreen({
     respuesta: RespuestaContacto;
   } | null>(null);
   /**
-   * Los ids de los anuncios de quien está mirando, tal como los tiene el
-   * dispositivo. Se releen al cambiar de cuenta, porque pueden haberse anotado en
-   * otra pantalla (publicar, entrar a "Mis anuncios"), y con ellos el feed deja de
-   * ofrecer un chat con los anuncios propios.
+   * Al cambiar de cuenta el feed se vuelve a pedir: qué anuncios son tuyos lo
+   * calcula el servidor con la sesión, y la lista anterior era de otra persona.
    */
   const usuarioId = sesion?.usuario.id;
-  const propios = useMemo(
-    () => (usuarioId ? leerPropios() : new Set<number>()),
-    [usuarioId]
-  );
   const { irAPublicar, irAConfiguracion, irAMiPerfil } = useNavegacion();
 
   /** Abre la ficha y pone el id en la URL, para que el enlace sea compartible. */
@@ -520,7 +512,7 @@ export default function FeedScreen({
     listarAnuncios({ ...aConsulta(filtros, punto), limite: 20 })
       .then((respuesta) => {
         if (numero !== ultimaPeticion.current) return;
-        setAnuncios(respuesta.items.map((a) => aTarjeta(a, a.distanciaKm, propios)));
+        setAnuncios(respuesta.items.map((a) => aTarjeta(a, a.distanciaKm)));
         setGuardados(new Set(respuesta.items.filter((a) => a.guardado).map((a) => a.id)));
         setCursor(respuesta.pagina.siguienteCursor);
         setHayMas(respuesta.pagina.hayMas);
@@ -539,7 +531,7 @@ export default function FeedScreen({
       });
     // `filtros` y `punto` ya están resumidos en `claveCarga`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claveCarga, propios]);
+  }, [claveCarga, usuarioId]);
 
   /**
    * Paginación por cursor, como en Facebook: al acercarse al final se pide la
@@ -563,7 +555,7 @@ export default function FeedScreen({
           ...previos,
           ...respuesta.items
             .filter((a) => !vistos.has(a.id))
-            .map((a) => aTarjeta(a, a.distanciaKm, propios)),
+            .map((a) => aTarjeta(a, a.distanciaKm)),
         ];
       });
       setGuardados((prev) => {
@@ -744,19 +736,8 @@ export default function FeedScreen({
   );
 
   return (
-    <MarcoApp
-      centro={<div className="hidden min-w-0 flex-1 sm:flex">{buscador}</div>}
-      acciones={
-        <button
-          type="button"
-          aria-label="Notificaciones"
-          onClick={() => notificarInfo('Las notificaciones llegan muy pronto.')}
-          className="grid size-9 shrink-0 place-items-center rounded-full text-muted transition-colors hover:text-foreground"
-        >
-          <IconoCampana />
-        </button>
-      }
-    >
+    // La campana ya la pone el marco en todas las pantallas.
+    <MarcoApp centro={<div className="hidden min-w-0 flex-1 sm:flex">{buscador}</div>}>
       <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 items-start gap-6 px-4 pt-5 pb-6 sm:px-6 lg:gap-8 lg:px-8 lg:py-8 xl:grid-cols-[minmax(0,1fr)_300px]">
         {/* En lista, la columna se centra a un ancho de lectura, como el feed de
             Facebook: a todo el ancho, cada foto medía media pantalla. */}
@@ -835,7 +816,7 @@ export default function FeedScreen({
           ) : (
             <>
               <div
-                className={`mt-5 grid ${vista === 'lista' ? CLASE_LISTA : CLASE_REJILLA}`}
+                className={`cascada mt-5 grid ${vista === 'lista' ? CLASE_LISTA : CLASE_REJILLA}`}
               >
                 {visibles.map((anuncio) => {
                   const guardado = guardados.has(anuncio.id);
@@ -856,7 +837,12 @@ export default function FeedScreen({
                       // del pulgar, del guardar y de las fotos.
                       onAbrir={vista === 'rejilla' ? () => abrirFicha(anuncio) : undefined}
                       onVerDetalle={() => abrirFicha(anuncio)}
-                      onPostular={anuncio.pilar === 'empleo' ? () => abrirFicha(anuncio) : undefined}
+                      // Un negocio no se postula: su tarjeta ofrece el contacto de siempre.
+                      onPostular={
+                        anuncio.pilar === 'empleo' && sesion.usuario.tipo_cuenta !== 'NEGOCIO'
+                          ? () => abrirFicha(anuncio)
+                          : undefined
+                      }
                       contarVista={!sinConexion}
                       vista={vista}
                       id={anuncio.id}
@@ -1022,10 +1008,9 @@ export default function FeedScreen({
           contacto={contacto.respuesta}
           nombreAutor={contacto.anuncio.autor?.nombre ?? 'quien lo publicó'}
           onEscribir={() => {
-            // El chat todavía no existe, así que avisa igual que el botón de la
-            // cabecera en vez de llevar a ninguna parte.
-            notificarInfo(CHAT_PENDIENTE);
+            const anuncioId = contacto.anuncio.id;
             setContacto(null);
+            void abrirChat({ anuncioId });
           }}
           onCerrar={() => setContacto(null)}
         />

@@ -2,19 +2,6 @@ import type { PerfilUsuario } from '../types/auth';
 import type { MotivoContacto } from '../types/anuncio';
 
 /**
- * El chat con quien publicó.
- *
- * Todavía no existe: no hay API de conversaciones, así que el botón es solo la
- * señal de que la acción va en esa dirección. Al pulsarlo avisa en vez de llevar
- * a ninguna parte, que es lo honesto mientras tanto.
- *
- * El texto vive aquí y no en cada botón para que la ficha y la publicación de la
- * lista digan exactamente lo mismo.
- */
-export const CHAT_PENDIENTE =
-  'El chat todavía no está disponible. Pronto podrás escribirle a quien publicó.';
-
-/**
  * Por qué no sale un número, en palabras de la persona que lo pidió.
  *
  * El backend responde 200 con `disponible: false` y un motivo, porque no

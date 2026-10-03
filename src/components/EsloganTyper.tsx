@@ -8,6 +8,8 @@ interface Props {
   /** Pausa en milisegundos cuando la frase está completa. */
   pausa?: number;
   className?: string;
+  /** Color del cursor. Sobre un fondo amarillo, el amarillo de marca no se vería. */
+  colorCursor?: string;
 }
 
 /**
@@ -19,6 +21,7 @@ export default function EsloganTyper({
   velocidad = 55,
   pausa = 2100,
   className,
+  colorCursor = 'bg-brand',
 }: Props) {
   const [texto, setTexto] = useState('');
   const [estado, setEstado] = useState<'escribiendo' | 'pausa' | 'borrando'>(
@@ -71,7 +74,9 @@ export default function EsloganTyper({
     <p className={className} aria-hidden="true">
       <span className="whitespace-pre-wrap break-words">{texto}</span>
       <span
-        className={`inline-block h-[1.15em] w-[0.09em] translate-y-[0.18em] rounded-[1px] bg-brand transition-none ${
+        // Más bajo que la línea: con titulares de interlineado apretado, un
+        // cursor más alto empujaba la última línea y la separaba de las demás.
+        className={`ml-[0.04em] inline-block h-[0.82em] w-[0.08em] translate-y-[0.06em] rounded-[1px] ${colorCursor} transition-none ${
           cursorOn ? 'opacity-100' : 'opacity-0'
         }`}
       />

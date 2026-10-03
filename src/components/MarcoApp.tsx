@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { categoriasDe, useCatalogos, useResumenCatalogo } from '../lib/catalogos';
 import { ESTILO_PILAR, NOMBRE_PILAR, type Pilar } from '../lib/pilares';
 import CabeceraBaknazo from './CabeceraBaknazo';
+import BotonSoporte from './BotonSoporte';
+import CampanaNotificaciones from './CampanaNotificaciones';
 import Emblema from './Emblema';
 import MenuCuenta from './MenuCuenta';
 import {
@@ -14,6 +16,7 @@ import {
   IconoMaletin,
   IconoCerrar,
   IconoEtiqueta,
+  IconoGrupo,
   IconoGuardar,
   IconoMas,
   IconoMenu,
@@ -22,13 +25,18 @@ import {
 } from './Iconos';
 import { useBloqueoScroll } from '../lib/bloqueoScroll';
 import { guardarMenuVisible, leerMenuVisible, useNavegacion } from '../lib/navegacion';
-import { notificarInfo } from '../lib/notificar';
+import { useNoLeidos } from '../lib/chatEnVivo';
+import { LayoutGroup, m } from 'motion/react';
+import { RESORTE, SALIDA } from '../lib/movimiento';
 
 type Seccion =
   | 'inicio'
   | 'explorar'
   | 'mis-anuncios'
   | 'postulaciones'
+  | 'vacantes'
+  | 'mensajes'
+  | 'notificaciones'
   | 'guardados'
   | 'publicar'
   | 'perfil'
@@ -40,6 +48,9 @@ function seccionDe(ruta: string, miId: string | null): Seccion {
   if (ruta === '/anuncios' || ruta.startsWith('/anuncio/')) return 'inicio';
   if (ruta.startsWith('/explorar')) return 'explorar';
   if (ruta.startsWith('/postulaciones')) return 'postulaciones';
+  if (ruta.startsWith('/vacantes')) return 'vacantes';
+  if (ruta.startsWith('/mensajes')) return 'mensajes';
+  if (ruta.startsWith('/notificaciones')) return 'notificaciones';
   if (ruta.startsWith('/guardados')) return 'guardados';
   if (ruta.startsWith('/mis-anuncios')) return 'mis-anuncios';
   if (ruta.startsWith('/publicar')) return 'publicar';
@@ -69,6 +80,7 @@ export default function MarcoApp({
   titulo,
   centro,
   acciones,
+  sinBarraInferior = false,
   children,
 }: {
   titulo?: string;
@@ -76,6 +88,12 @@ export default function MarcoApp({
   centro?: ReactNode;
   /** Botones propios de la pantalla, a la izquierda del de cuenta. */
   acciones?: ReactNode;
+  /**
+   * Oculta la barra de pestañas de móvil. Una conversación abierta ocupa toda
+   * la pantalla, como en cualquier app de mensajería: con la barra, quedaría
+   * flotando encima del teclado y robaría alto a los mensajes.
+   */
+  sinBarraInferior?: boolean;
   children: ReactNode;
 }) {
   const nav = useNavegacion();
@@ -138,6 +156,8 @@ export default function MarcoApp({
             {acciones}
             {nav.sesion ? (
               <>
+                <CampanaNotificaciones activa={seccion === 'notificaciones'} />
+                <BotonMensajes activa={seccion === 'mensajes'} />
                 {seccion !== 'publicar' && (
                   <button
                     type="button"
@@ -153,7 +173,7 @@ export default function MarcoApp({
             ) : (
               <button
                 type="button"
-                onClick={nav.irAlLogin}
+                onClick={() => nav.irAlLogin()}
                 className="inline-flex h-10 shrink-0 items-center rounded-lg bg-brand px-4 text-[14px] font-semibold text-foreground transition-colors hover:bg-brand-dark"
               >
                 Entrar
@@ -172,17 +192,31 @@ export default function MarcoApp({
               : 'hidden'
           }
         >
-          <ListaNavegacion seccion={seccion} />
+          <LayoutGroup id="menu-lateral">
+            <ListaNavegacion seccion={seccion} />
+          </LayoutGroup>
         </aside>
 
         {/* El hueco de abajo es el de la barra de pestañas en móvil: sin él, la
             última fila de cualquier pantalla quedaría tapada. */}
-        <div className="min-w-0 flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
-          {children}
+        <div
+          className={`min-w-0 flex-1 ${
+            sinBarraInferior ? '' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0'
+          }`}
+        >
+          {/* Cada pantalla entra con un fundido corto. Solo opacidad: un
+              desplazamiento aquí movería también las ventanas fijas (fichas,
+              modales) que se abren al cargar. */}
+          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.32, ease: SALIDA }}>
+            {children}
+          </m.div>
         </div>
       </div>
 
-      {nav.sesion && <BarraInferior seccion={seccion} />}
+      {nav.sesion && !sinBarraInferior && <BarraInferior seccion={seccion} />}
+
+      {/* Soporte: botón flotante solo en escritorio; en móvil vive en Configuración. */}
+      {nav.sesion && <BotonSoporte />}
 
       {cajon && (
         <div className="fixed inset-0 z-55 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú">
@@ -208,7 +242,9 @@ export default function MarcoApp({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <ListaNavegacion seccion={seccion} />
+              <LayoutGroup id="menu-cajon">
+                <ListaNavegacion seccion={seccion} />
+              </LayoutGroup>
             </div>
           </div>
         </div>
@@ -217,12 +253,38 @@ export default function MarcoApp({
   );
 }
 
-/** Lo que aún no existe avisa en vez de llevar a una pantalla vacía. */
-const pronto = (que: string) => () => notificarInfo(`${que} llega muy pronto.`);
+/**
+ * Acceso al chat en la cabecera, con el contador de no leídos. Está en todas
+ * las pantallas y en móvil también: la barra de abajo no tiene sitio para él.
+ */
+function BotonMensajes({ activa }: { activa: boolean }) {
+  const nav = useNavegacion();
+  const noLeidos = useNoLeidos();
+  return (
+    <button
+      type="button"
+      onClick={nav.irAMensajes}
+      aria-label={noLeidos > 0 ? `Mensajes, ${noLeidos} sin leer` : 'Mensajes'}
+      aria-current={activa ? 'page' : undefined}
+      title="Mensajes"
+      className={`relative grid size-10 shrink-0 place-items-center rounded-full transition-colors hover:bg-white ${
+        activa ? 'text-accent' : 'text-foreground'
+      }`}
+    >
+      <IconoBocadillo />
+      {noLeidos > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent px-1 text-[10.5px] font-semibold text-white tabular-nums ring-2 ring-background">
+          {noLeidos > 99 ? '99+' : noLeidos}
+        </span>
+      )}
+    </button>
+  );
+}
 
 /** La lista del menú, igual en la columna de escritorio y en el cajón de móvil. */
 function ListaNavegacion({ seccion }: { seccion: Seccion }) {
   const nav = useNavegacion();
+  const noLeidos = useNoLeidos();
 
   if (!nav.sesion) {
     return (
@@ -232,7 +294,7 @@ function ListaNavegacion({ seccion }: { seccion: Seccion }) {
         </p>
         <button
           type="button"
-          onClick={nav.irAlLogin}
+          onClick={() => nav.irAlLogin()}
           className="flex h-11 w-full items-center justify-center rounded-xl bg-brand text-[14px] font-semibold text-foreground transition-colors hover:bg-brand-dark"
         >
           Entrar o crear cuenta
@@ -266,6 +328,11 @@ function ListaNavegacion({ seccion }: { seccion: Seccion }) {
         >
           Mis anuncios
         </Entrada>
+        {nav.sesion.usuario.tipo_cuenta === 'NEGOCIO' && (
+          <Entrada icono={<IconoGrupo />} activa={seccion === 'vacantes'} onClick={nav.irAVacantes}>
+            Vacantes
+          </Entrada>
+        )}
         <Entrada
           icono={<IconoMaletin />}
           activa={seccion === 'postulaciones'}
@@ -279,7 +346,12 @@ function ListaNavegacion({ seccion }: { seccion: Seccion }) {
         <Entrada icono={<IconoGuardar />} activa={seccion === 'guardados'} onClick={nav.irAGuardados}>
           Guardados
         </Entrada>
-        <Entrada icono={<IconoBocadillo />} onClick={pronto('El chat')} etiqueta="Pronto">
+        <Entrada
+          icono={<IconoBocadillo />}
+          activa={seccion === 'mensajes'}
+          onClick={nav.irAMensajes}
+          contador={noLeidos}
+        >
           Mensajes
         </Entrada>
       </ul>
@@ -417,6 +489,7 @@ function Entrada({
   icono,
   activa = false,
   etiqueta,
+  contador = 0,
   onClick,
   children,
 }: {
@@ -424,6 +497,8 @@ function Entrada({
   activa?: boolean;
   /** Marca a la derecha, como "Pronto". */
   etiqueta?: string;
+  /** Cuántas cosas esperan (mensajes sin leer). Con 0 no se pinta. */
+  contador?: number;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -435,15 +510,30 @@ function Entrada({
         aria-current={activa ? 'page' : undefined}
         className={
           activa
-            ? 'flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-left text-[14px] font-semibold text-foreground shadow-[0_1px_2px_rgba(31,41,55,0.08)] ring-1 ring-border'
-            : 'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium text-foreground transition-colors hover:bg-white'
+            ? 'relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-semibold text-foreground'
+            : 'relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium text-foreground transition-colors hover:bg-white/70'
         }
       >
-        <span className={activa ? 'text-accent' : 'text-muted'}>{icono}</span>
-        <span className="min-w-0 flex-1 truncate">{children}</span>
+        {/* El fondo blanco de la opción activa viaja de una a otra al navegar. */}
+        {activa && (
+          <m.span
+            layoutId="menu-activo"
+            transition={RESORTE}
+            aria-hidden="true"
+            className="absolute inset-0 rounded-xl bg-white shadow-[0_1px_2px_rgba(31,41,55,0.08)] ring-1 ring-border"
+          />
+        )}
+        <span className={`relative ${activa ? 'text-accent' : 'text-muted'}`}>{icono}</span>
+        <span className="relative min-w-0 flex-1 truncate">{children}</span>
         {etiqueta && (
-          <span className="rounded-full bg-border/70 px-2 py-0.5 text-[10.5px] font-semibold text-muted">
+          <span className="relative rounded-full bg-border/70 px-2 py-0.5 text-[10.5px] font-semibold text-muted">
             {etiqueta}
+          </span>
+        )}
+        {contador > 0 && (
+          <span className="relative grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-white tabular-nums">
+            {contador > 99 ? '99+' : contador}
+            <span className="sr-only"> sin leer</span>
           </span>
         )}
       </button>
@@ -463,6 +553,8 @@ function BarraInferior({ seccion }: { seccion: Seccion }) {
   return (
     <nav
       aria-label="Secciones"
+      // Lo mide el chat para ajustar su alto al hueco que deja la barra.
+      data-barra-inferior=""
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
     >
       <ul className="mx-auto grid h-16 max-w-md grid-cols-5">
@@ -485,7 +577,7 @@ function BarraInferior({ seccion }: { seccion: Seccion }) {
         </li>
         <Pestana
           icono={<IconoEtiqueta />}
-          activa={seccion === 'mis-anuncios' || seccion === 'postulaciones'}
+          activa={seccion === 'mis-anuncios' || seccion === 'postulaciones' || seccion === 'vacantes'}
           onClick={nav.irAMisAnuncios}
         >
           Anuncios
@@ -510,7 +602,16 @@ function Pestana({
   children: ReactNode;
 }) {
   return (
-    <li>
+    <li className="relative">
+      {/* Una rayita arriba de la pestaña activa, que se desliza al cambiar. */}
+      {activa && (
+        <m.span
+          layoutId="pestana-activa"
+          transition={RESORTE}
+          aria-hidden="true"
+          className="absolute top-0 left-1/2 h-[3px] w-8 -translate-x-1/2 rounded-b-full bg-accent"
+        />
+      )}
       <button
         type="button"
         onClick={onClick}

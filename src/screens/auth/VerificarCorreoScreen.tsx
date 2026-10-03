@@ -6,6 +6,7 @@ import {
 } from '../../api/auth';
 import Emblema from '../../components/Emblema';
 import {
+  cerrarAlertas,
   notificarError,
   notificarExito,
 } from '../../lib/notificar';
@@ -73,6 +74,7 @@ export default function VerificarCorreoScreen({
     setCargando('verificar');
     try {
       const sesion = await verificarCorreo(correo, codigo.trim(), persistente);
+      cerrarAlertas();
       onVerificado(sesion);
     } catch (e) {
       if (

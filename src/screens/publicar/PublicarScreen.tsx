@@ -5,16 +5,17 @@ import TarjetaAnuncio from '../../components/TarjetaAnuncio';
 import FormularioAnuncio from '../../components/FormularioAnuncio';
 import PreviaAnuncio from '../../components/PreviaAnuncio';
 import { IconoAlerta, IconoInfo } from '../../components/Iconos';
-import { crearAnuncio, erroresDeValidacion, obtenerCatalogos } from '../../api/anuncios';
+import { crearAnuncio, erroresDeValidacion, esBloqueoDeModeracion, obtenerCatalogos, obtenerMisAnuncios } from '../../api/anuncios';
+import { ciudadDelNegocio, ciudadRecordada, ciudadValida, recordarCiudad } from '../../lib/ciudadPorDefecto';
+import AvisoModeracion from '../../components/AvisoModeracion';
 import {
   borrarBorrador,
   guardarBorrador,
   leerBorrador,
 } from '../../lib/borradorPublicar';
-import { notificarAviso, notificarExito } from '../../lib/notificar';
+import { notificarAviso, notificarError, notificarExito } from '../../lib/notificar';
 import { telefonoDeContacto, telefonoPlausible } from '../../lib/contacto';
 import { actualizarPerfil } from '../../api/auth';
-import { anotarPropios } from '../../lib/propios';
 import { lineaDeCelebracion } from '../../lib/celebrar';
 import { useObjectUrl } from '../../lib/objetoUrl';
 import { ESTILO_PILAR, type Pilar } from '../../lib/pilares';
@@ -89,6 +90,7 @@ export default function PublicarScreen({
     catalogosDeRespaldo()
   );
   const [sinCatalogos, setSinCatalogos] = useState(false);
+  const [catalogosReales, setCatalogosReales] = useState(false);
   const [pilar, setPilar] = useState<Pilar>(
     () => (borrador?.pilar as Pilar | undefined) ?? 'productos'
   );
@@ -97,6 +99,8 @@ export default function PublicarScreen({
       catalogosDeRespaldo().maxFotos,
       perfil?.contacto?.mostrar_telefono ?? false
     ),
+    // La ciudad sale ya elegida: la de la última publicación de este navegador.
+    cantonCodigo: ciudadRecordada(),
     ...(borrador ?? {}),
     // El borrador no guarda archivos: las fotos se piden de nuevo.
     fotos: Array.from(
@@ -104,6 +108,18 @@ export default function PublicarScreen({
       () => null
     ),
   }));
+
+  /**
+   * Las vacantes solo las publican negocios (el backend responde 403 si no).
+   * Si el perfil ya dice que no es un negocio y el borrador quedó en empleo, se
+   * pasa a productos soltando la categoría y el detalle de empleo, que ahí no
+   * valen. Se ajusta en el render, igual que la preferencia del teléfono.
+   */
+  const sinEmpleo = perfil !== null && perfil.tipo_cuenta !== 'NEGOCIO';
+  if (sinEmpleo && pilar === 'empleo') {
+    setPilar('productos');
+    setForm((anterior) => ({ ...anterior, categoriaId: '', jornada: '', modalidad: '' }));
+  }
   const [errores, setErrores] = useState<Partial<Record<ErrorCampo, string>>>({});
   const [publicando, setPublicando] = useState(false);
   /**
@@ -194,6 +210,8 @@ export default function PublicarScreen({
       modalidadCobro: form.modalidadCobro,
       jornada: form.jornada,
       modalidad: form.modalidad,
+      modoPostulacion: form.modoPostulacion,
+      preguntas: form.preguntas,
       mostrarTelefono: form.mostrarTelefono,
     });
   }, [form, pilar]);
@@ -207,6 +225,7 @@ export default function PublicarScreen({
       .then((respuesta) => {
         if (!vivo) return;
         setCatalogos(respuesta);
+        setCatalogosReales(true);
         setForm((anterior) => ({
           ...anterior,
           fotos: Array.from({ length: respuesta.maxFotos }, () => null),
@@ -222,6 +241,42 @@ export default function PublicarScreen({
       vivo = false;
     };
   }, []);
+
+  /**
+   * Sin ciudad recordada (primera vez en este navegador), se busca una: la del
+   * negocio si lo es, o la de su último anuncio. Solo rellena si sigue vacía:
+   * nunca pisa una ciudad que ya se eligió.
+   */
+  const [buscoCiudad, setBuscoCiudad] = useState(false);
+  // El catálogo de respaldo usa nombres como códigos: hasta tener el real no
+  // se elige ni se descarta ninguna ciudad.
+  const ciudadNegocio = catalogosReales ? ciudadDelNegocio(perfil, catalogos) : '';
+  if (catalogosReales && !form.cantonCodigo && ciudadNegocio && !buscoCiudad) {
+    setBuscoCiudad(true);
+    setForm((anterior) => (anterior.cantonCodigo ? anterior : { ...anterior, cantonCodigo: ciudadNegocio }));
+  }
+  useEffect(() => {
+    if (!catalogosReales || buscoCiudad || form.cantonCodigo || perfil === null || ciudadNegocio) return;
+    let vivo = true;
+    obtenerMisAnuncios({ limite: 1 })
+      .then((r) => {
+        const codigo = r.items[0]?.cantonCodigo;
+        if (!vivo || !codigo) return;
+        setForm((anterior) => (anterior.cantonCodigo ? anterior : { ...anterior, cantonCodigo: codigo }));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (vivo) setBuscoCiudad(true);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [catalogosReales, buscoCiudad, form.cantonCodigo, perfil, ciudadNegocio]);
+
+  // Una ciudad recordada que ya no existe en el catálogo no se impone.
+  if (catalogosReales && form.cantonCodigo && !ciudadValida(form.cantonCodigo, catalogos)) {
+    setForm((anterior) => ({ ...anterior, cantonCodigo: '' }));
+  }
 
   const categorias = useMemo(
     () => catalogos.categorias.filter((c) => c.pilar === pilar),
@@ -391,16 +446,21 @@ export default function PublicarScreen({
       if (!(await guardarTelefonoNuevo())) return;
 
       const respuesta = await crearAnuncio(construirDatos(), fotos, claveIdempotencia);
-      // El id se apunta para que el feed no le ofrezca un chat al recién
-      // publicado, que es justo el caso en el que más se notaría.
-      anotarPropios([respuesta.anuncio.id]);
 
       setClaveIdempotencia(nuevaClaveIdempotencia());
-      setForm(formularioVacio(catalogos.maxFotos, form.mostrarTelefono));
+      // La próxima publicación ya sale con esta ciudad elegida.
+      recordarCiudad(form.cantonCodigo);
+      setForm({ ...formularioVacio(catalogos.maxFotos, form.mostrarTelefono), cantonCodigo: form.cantonCodigo });
       setErrores({});
       setVerPrevia(false);
       borrarBorrador();
-      notificarExito(lineaDeCelebracion());
+      // Si una regla de moderación lo detuvo, se dice: no se celebra algo que
+      // todavía no está en el feed.
+      if (respuesta.estado === 'PENDIENTE_REVISION') {
+        notificarAviso('Tu anuncio quedó en revisión. Te avisaremos cuando se publique; lo ves en Mis anuncios.');
+      } else {
+        notificarExito(lineaDeCelebracion());
+      }
       onVolver();
     } catch (e) {
       const delServidor = erroresDeValidacion(e);
@@ -408,9 +468,14 @@ export default function PublicarScreen({
         const mapeados = mapearErrores(delServidor);
         setErrores(mapeados);
         setVerPrevia(true);
-        // Si el 422 habla de campos que este formulario no tiene, el mensaje
-        // se avisa igual en vez de tragárselo.
-        if (Object.keys(mapeados).length === 0) notificarAviso(mensajeDe(e));
+        // La moderación lo bloqueó: se dice claro, sin decir qué palabra.
+        if (esBloqueoDeModeracion(delServidor)) {
+          notificarError('No se puede publicar: hay contenido que las normas de Baknazo no permiten. Revisa los campos marcados.');
+        } else if (Object.keys(mapeados).length === 0) {
+          // Si el 422 habla de campos que este formulario no tiene, el mensaje
+          // se avisa igual en vez de tragárselo.
+          notificarAviso(mensajeDe(e));
+        }
       } else {
         notificarAviso(mensajeDe(e));
       }
@@ -454,6 +519,7 @@ export default function PublicarScreen({
             <SegmentadoPilar
               activo={pilar}
               onCambio={cambiarPilar}
+              sinEmpleo={sinEmpleo}
               tono={estilo.solido}
               tonoOscuro={estilo.solidoOscuro}
               sobreTono={estilo.sobreSolido}
@@ -479,6 +545,11 @@ export default function PublicarScreen({
         telefonoNuevoValido={telefonoNuevoValido}
                 avisos={
                   <>
+                    <AvisoModeracion
+                      titulo={form.titulo}
+                      descripcion={form.descripcion}
+                      categoriaId={form.categoriaId === '' ? null : form.categoriaId}
+                    />
                     {borrador && (
                       <p className={avisoInfo}>
                         <IconoInfo />
@@ -586,12 +657,15 @@ function mensajeDe(e: unknown): string {
 function SegmentadoPilar({
   activo,
   onCambio,
+  sinEmpleo,
   tono,
   tonoOscuro,
   sobreTono,
 }: {
   activo: Pilar;
   onCambio: (p: Pilar) => void;
+  /** Cuenta de persona: no ve la opción de publicar vacantes. */
+  sinEmpleo: boolean;
   tono: string;
   tonoOscuro: string;
   sobreTono: string;
@@ -599,7 +673,7 @@ function SegmentadoPilar({
   const opciones: { id: Pilar; label: string }[] = [
     { id: 'productos', label: 'Producto' },
     { id: 'servicios', label: 'Servicio' },
-    { id: 'empleo', label: 'Empleo' },
+    ...(sinEmpleo ? [] : [{ id: 'empleo' as const, label: 'Empleo' }]),
   ];
   return (
     <div

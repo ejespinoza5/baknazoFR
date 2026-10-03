@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { IconoCerrar, IconoFiltros, IconoPin } from './Iconos';
+import Selector from './Selector';
 import { nombreDeCanton } from '../lib/catalogos';
 import {
   ETIQUETA_ORDEN,
@@ -80,31 +81,29 @@ export default function BarraFiltros({
           )}
         </button>
 
-        <label className="ml-auto hidden shrink-0 items-center gap-2 text-[13px] text-muted md:flex">
-          Ordenar
-          <select
-            value={
+        <div className="ml-auto hidden shrink-0 items-center gap-2 text-[13px] text-muted md:flex">
+          <span aria-hidden="true">Ordenar</span>
+          <Selector
+            etiqueta="Ordenar"
+            valor={
               filtros.cerca
                 ? 'cercanos'
                 : filtros.orden === 'cercanos'
                   ? ordenPorDefecto(filtros.q)
                   : filtros.orden
             }
-            onChange={(e) => {
-              const valor = e.target.value;
+            onCambiar={(valor) => {
               if (valor === 'cercanos') onAlternarCerca();
               else onCambiar({ ...filtros, orden: valor as FiltrosUrl['orden'], cerca: null });
             }}
-            className="h-9 rounded-lg border border-border bg-white px-2.5 text-[13px] font-medium text-foreground focus:border-accent/70 focus:outline-none"
-          >
-            {ordenesDisponibles(filtros.q).map((o) => (
-              <option key={o} value={o}>
-                {ETIQUETA_ORDEN[o]}
-              </option>
-            ))}
-            <option value="cercanos">Más cerca de mí</option>
-          </select>
-        </label>
+            opciones={[
+              ...ordenesDisponibles(filtros.q).map((o) => ({ valor: o, texto: ETIQUETA_ORDEN[o] })),
+              { valor: 'cercanos', texto: 'Más cerca de mí' },
+            ]}
+            buscable={false}
+            clase="h-9 min-w-44 rounded-lg border border-border bg-white px-3 text-[13px] font-medium text-foreground transition-colors hover:border-muted focus-visible:border-accent/70 focus-visible:ring-[3px] focus-visible:ring-accent/15 focus:outline-none"
+          />
+        </div>
       </div>
 
       {activos.length > 0 && (

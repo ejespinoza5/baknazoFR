@@ -45,7 +45,7 @@ export default function NoEncontradoScreen() {
           <>
             <button
               type="button"
-              onClick={irAlLogin}
+              onClick={() => irAlLogin()}
               className="h-11 rounded-lg bg-brand px-5 text-[14.5px] font-semibold text-foreground transition-colors hover:bg-brand-dark"
             >
               Entrar a Baknazo

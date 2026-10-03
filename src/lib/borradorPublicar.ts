@@ -12,6 +12,8 @@
  * texto se conserva.
  */
 
+import type { PreguntaEmpleo } from '../types/anuncio';
+
 const CLAVE = 'baknazo.borrador.publicar';
 
 /** Los campos de texto del formulario, sin los `File`. */
@@ -26,6 +28,9 @@ export interface BorradorPublicar {
   modalidadCobro: string;
   jornada: string;
   modalidad: string;
+  /** El cuestionario de una vacante: lo que más cuesta volver a escribir. */
+  modoPostulacion: 'rapida' | 'cuestionario';
+  preguntas: PreguntaEmpleo[];
   /** Sí se recuerda: es una decisión del usuario y no se quiere perder al F5. */
   mostrarTelefono: boolean;
 }
@@ -41,6 +46,8 @@ const VACIO: BorradorPublicar = {
   modalidadCobro: '',
   jornada: '',
   modalidad: '',
+  modoPostulacion: 'rapida',
+  preguntas: [],
   mostrarTelefono: false,
 };
 
@@ -55,7 +62,8 @@ function tieneContenido(b: BorradorPublicar): boolean {
     b.condicion !== '' ||
     b.modalidadCobro !== '' ||
     b.jornada !== '' ||
-    b.modalidad !== ''
+    b.modalidad !== '' ||
+    b.preguntas.length > 0
   );
 }
 
@@ -79,6 +87,10 @@ export function leerBorrador(): BorradorPublicar | null {
         // volvería "" y una casilla con valor "" se desmarca sola; se le exige
         // un booleano de verdad.
         if (typeof leido.mostrarTelefono !== 'boolean') leido.mostrarTelefono = false;
+      } else if (clave === 'modoPostulacion') {
+        if (leido.modoPostulacion !== 'cuestionario') leido.modoPostulacion = 'rapida';
+      } else if (clave === 'preguntas') {
+        if (!Array.isArray(leido.preguntas)) leido.preguntas = [];
       } else if (typeof leido[clave] !== 'string') {
         leido[clave] = '';
       }
